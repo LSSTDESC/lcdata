@@ -2,6 +2,7 @@ import astropy
 import numpy as np
 import os
 import sys
+from collections.abc import MutableMapping
 
 
 def get_str_dtype_length(dtype):
@@ -22,21 +23,21 @@ observation_aliases = {
     'zpsys': ('zpsys', 'zpmagsys', 'magsys'),
 }
 
-metadata_keys = (
+metadata_keys = {
     # Common metadata keys to handle. This array has entries of the format:
     # (key: str, type: Type, required: bool, default: Any, aliases: list[str])
     # All of these keys are guaranteed to be in the metadata.
-    ('object_id', str, True, None, ('object_id',)),
-    ('ra', float, False, np.nan, ('ra', 'right_ascension', 'host_ra',
+    'object_id': (str, True, None, ('object_id',)),
+    'ra': (float, False, np.nan, ('ra', 'right_ascension', 'host_ra',
                                   'host_right_ascension', 'hostgal_ra',
                                   'hostgal_right_ascension')),
-    ('dec', float, False, None, ('dec', 'decl', 'declination', 'host_dec', 'host_decl',
+    'dec': (float, False, None, ('dec', 'decl', 'declination', 'host_dec', 'host_decl',
                                  'host_declination', 'hostgal_dec', 'hostgal_decl',
                                  'hostgal_declination')),
-    ('type', str, False, 'Unknown', ('type', 'label', 'class', 'classification')),
-    ('redshift', float, False, np.nan, ('redshift', 'z', 'true_z', 'host_z',
+    'type': (str, False, 'Unknown', ('type', 'label', 'class', 'classification')),
+    'redshift': (float, False, np.nan, ('redshift', 'z', 'true_z', 'host_z',
                                         'host_specz', 'hostgal_z', 'hostgal_specz')),
-)
+}
 
 
 def find_alias(keyword, names, aliases, ignore_failure=False):
@@ -107,7 +108,7 @@ def verify_unique(list_1, list_2, ignore_failure=False):
         else:
             raise ValueError(
                 f"Found overlap of {len(common_ids)} entries including "
-                "'{common_ids.pop()}'. Can't handle."
+                f"'{common_ids.pop()}'. Can't handle."
             )
     else:
         return True
@@ -115,6 +116,59 @@ def verify_unique(list_1, list_2, ignore_failure=False):
 
 warned_default_zp = False
 warned_default_zpsys = False
+
+
+class LightCurveMetadata(MutableMapping):
+    """Class to handle the metadata for a light curve.
+
+    This is a view into the metadata table that behaves like a dict.
+    """
+    def __init__(self, meta_row):
+        self.meta_row = meta_row
+
+    def __getitem__(self, key):
+        return self.meta_row[key]
+
+    def __setitem__(self, key, value):
+        self.meta_row[key] = value
+
+    def __delitem__(self, key):
+        if key in metadata_keys:
+            # Key is required, set it to the default value.
+            self.meta_row[key] = metadata_keys[key][2]
+        else:
+            # Mask out the entry to make it disappear. First, convert the column to a
+            # masked one if it isn't already.
+            table = self.meta_row.table
+            if not isinstance(table[key], astropy.table.MaskedColumn):
+                # Convert to a masked column
+                table[key] = astropy.table.MaskedColumn(table[key])
+
+            # Mask out the value
+            self.meta_row[key] = np.ma.masked
+
+    def __iter__(self):
+        # Return all of the keys for values that aren't masked.
+        for key, value in zip(self.meta_row.keys(), self.meta_row.values()):
+            if not isinstance(value, np.ma.core.MaskedConstant):
+                yield key
+
+    def __len__(self):
+        # Return the number of keys with values that aren't masked.
+        count = 0
+        for value in self.meta_row.values():
+            if not isinstance(value, np.ma.core.MaskedConstant):
+                count += 1
+        return count
+
+    def __str__(self):
+        return str(dict(self))
+
+    def __repr__(self):
+        return f"{type(self).__name__}({dict(self)})"
+
+    def copy(self):
+        return dict(self)
 
 
 def parse_meta(meta):
@@ -129,7 +183,7 @@ def parse_meta(meta):
     meta = meta.copy()
 
     # Parse each key and make sure that it is in the right format.
-    for key, meta_type, required, default, aliases in metadata_keys:
+    for key, (meta_type, required, default, aliases) in metadata_keys.items():
         alias = find_alias(key, meta.keys(), aliases, ignore_failure=True)
 
         if alias is None:
@@ -153,7 +207,7 @@ def parse_meta(meta):
             meta[key] = meta[key].filled(default)
 
     # Fix the column order.
-    col_order = [i[0] for i in metadata_keys]
+    col_order = list(metadata_keys.keys())
     for col in meta.colnames:
         if col not in col_order:
             col_order.append(col)
@@ -247,18 +301,17 @@ class Dataset:
 
         # Parse all of the light curves to get them in a standardized format.
         light_curves = [parse_light_curve(i) for i in light_curves]
-        self.light_curves = np.array(light_curves, dtype=object)
 
-        # Set up light curve metadata
-        # Turn the metadata into dictionaries that we can index. We ignore any masked
-        # columns.
-        # meta_dicts = {}
-        # for lc_meta in meta:
-            # meta_dict = {}
-            # for key, value in zip(lc_meta.keys(), lc_meta.values()):
-                # if not isinstance(value, np.ma.core.MaskedConstant):
-                    # meta_dict[key] = value
-            # meta_dicts[lc_meta['object_id']] = meta_dict
+        # Load the light curves into a numpy array. Doing this directly with np.array()
+        # calls .as_array() on every Table which is not what we want. Manually loading
+        # the array works and is much faster.
+        self.light_curves = np.empty(len(light_curves), dtype=object)
+        for i in range(len(light_curves)):
+            self.light_curves[i] = light_curves[i]
+
+        # Set up the meta data for each light curve to point to our table.
+        for lc, meta_row in zip(self.light_curves, self.meta):
+            lc.meta = LightCurveMetadata(meta_row)
 
     def __add__(self, other):
         verify_unique(self.meta['object_id'], other.meta['object_id'])
