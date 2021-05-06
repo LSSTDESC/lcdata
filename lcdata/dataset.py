@@ -12,28 +12,34 @@ def get_str_dtype_length(dtype):
         return dtype.itemsize
 
 
-aliases = {
-    # Photometric observation columns
+observation_aliases = {
     # Adapted from sncosmo
     'time': ('time', 'date', 'jd', 'mjd', 'mjdos', 'mjd_obs'),
-    'band': ('band', 'bandpass', 'filter', 'flt'),
     'flux': ('flux', 'f'),
     'fluxerr': ('fluxerr', 'flux_error', 'fe', 'fluxerror', 'flux_err'),
+    'band': ('band', 'bandpass', 'filter', 'flt'),
     'zp': ('zp', 'zpt', 'zeropoint', 'zero_point'),
     'zpsys': ('zpsys', 'zpmagsys', 'magsys'),
-
-    # Metadata
-    'ra': ('ra', 'right_ascension', 'host_ra', 'host_right_ascension', 'hostgal_ra',
-           'hostgal_right_ascension'),
-    'dec': ('dec', 'decl', 'declination', 'host_dec', 'host_decl', 'host_declination',
-            'hostgal_dec', 'hostgal_decl', 'hostgal_declination'),
-    'type': ('type', 'label', 'class', 'classification'),
-    'redshift': ('redshift', 'z', 'true_z', 'host_z', 'host_specz', 'hostgal_z',
-                 'hostgal_specz'),
 }
 
+metadata_keys = (
+    # Common metadata keys to handle. This array has entries of the format:
+    # (key: str, type: Type, required: bool, default: Any, aliases: list[str])
+    # All of these keys are guaranteed to be in the metadata.
+    ('object_id', str, True, None, ('object_id',)),
+    ('ra', float, False, np.nan, ('ra', 'right_ascension', 'host_ra',
+                                  'host_right_ascension', 'hostgal_ra',
+                                  'hostgal_right_ascension')),
+    ('dec', float, False, None, ('dec', 'decl', 'declination', 'host_dec', 'host_decl',
+                                 'host_declination', 'hostgal_dec', 'hostgal_decl',
+                                 'hostgal_declination')),
+    ('type', str, False, 'Unknown', ('type', 'label', 'class', 'classification')),
+    ('redshift', float, False, np.nan, ('redshift', 'z', 'true_z', 'host_z',
+                                        'host_specz', 'hostgal_z', 'hostgal_specz')),
+)
 
-def find_alias(keyword, names, ignore_failure=False):
+
+def find_alias(keyword, names, aliases, ignore_failure=False):
     """Find an alias for a given keyword
 
     Inspired by and very similar to `alias_map` in `sncosmo`.
@@ -41,24 +47,70 @@ def find_alias(keyword, names, ignore_failure=False):
     Parameters
     ----------
     keyword : str
-        The keyword to find an alias for
+        Keyword to search for
     names : list[str]
-        A list of names that are available.
+        List of names that are available
+    aliases : list[str]
+        List of aliases to search through. The first one that is available will be
+        returned.
+    ignore_failure : bool
+        If True, raise a ValueError on failure. If False, return None
 
     Returns
     -------
     alias : str
-        The alias in names that corresponds to the keyword.
+        The matching alias.
     """
     lowered_names = [i.lower() for i in names]
-    for alias in aliases[keyword]:
+    for alias in aliases:
         if alias in lowered_names:
             return alias
 
     if ignore_failure:
         return None
     else:
-        raise ValueError(f"Couldn't find key {keyword}. Possible aliases {names}.")
+        raise ValueError(f"Couldn't find key {keyword}. Possible aliases {aliases}.")
+
+
+def verify_unique(list_1, list_2, ignore_failure=False):
+    """Verify that two lists have no elements in common.
+
+    Parameters
+    ----------
+    list_1 : list
+        First list
+    list_2 : list
+        Second list to compare
+    ignore_failure : bool
+        If True, raise a ValueError on failure. If False, return False
+
+    Returns
+    -------
+    unique : bool
+        Returns True if there are no overlapping elements between the two lists. Returns
+        False if there are overlapping elements and ignore_failure is set to False.
+
+    Raises
+    ------
+    ValueError
+        If ignore_failure is False, raises a ValueError if there are overlapping
+        elements.
+    """
+    ids_1 = set(list_1)
+    ids_2 = set(list_2)
+    common_ids = ids_1.intersection(ids_2)
+
+    if common_ids:
+        # Found an overlap.
+        if ignore_failure:
+            return False
+        else:
+            raise ValueError(
+                f"Found overlap of {len(common_ids)} entries including "
+                "'{common_ids.pop()}'. Can't handle."
+            )
+    else:
+        return True
 
 
 warned_default_zp = False
@@ -79,17 +131,22 @@ def parse_light_curve(light_curve):
         The parsed light curve in a standardized format.
     """
 
-    # Check if the light curve is in our standardized format.
+    # Standardize the observations.
+    # Check if the light curve is in our standardized format and skip all of this if it
+    # is.
     standard_colnames = ['time', 'flux', 'fluxerr', 'band', 'zp', 'zpsys']
     if light_curve.colnames != standard_colnames:
         # Nope, need to move some things around.
         required_keys = ['time', 'flux', 'fluxerr', 'band']
-        use_keys = [find_alias(i, light_curve.colnames) for i in required_keys]
+        use_keys = [find_alias(i, light_curve.colnames, observation_aliases[i]) for i in
+                    required_keys]
 
         # zp and zpsys are often missing. Default to 25 AB if that is the case which is
         # almost always the format of supernova data.
-        zp_key = find_alias('zp', light_curve.colnames, ignore_failure=True)
-        zpsys_key = find_alias('zpsys', light_curve.colnames, ignore_failure=True)
+        zp_key = find_alias('zp', light_curve.colnames, observation_aliases['zp'],
+                            ignore_failure=True)
+        zpsys_key = find_alias('zpsys', light_curve.colnames,
+                               observation_aliases['zpsys'], ignore_failure=True)
 
         if zp_key is not None and zpsys_key is not None:
             # Have all keys
@@ -129,27 +186,31 @@ def parse_light_curve(light_curve):
             if target != alias:
                 light_curve.rename_column(alias, target)
 
-    # Standardize metadata
-    metadata_keys = ['ra', 'dec', 'type', 'redshift']
+    # Standardize the metadata
+    old_meta = light_curve.meta.copy()
+    new_meta = {}
 
-    for key in metadata_keys:
-        if key in light_curve.meta.keys():
-            # Already have the key, ignore.
-            continue
+    # Drop any masked values.
+    old_meta = {k: v for k, v in old_meta.items() if not
+                isinstance(v, np.ma.core.MaskedConstant)}
 
-        # Find the alias and swap it.
-        alias = find_alias(key, light_curve.meta.keys(), ignore_failure=True)
-        if alias is not None:
-            light_curve.meta[key] = light_curve.meta.pop(alias)
+    # (type: Type, required: bool, default: Any, aliases: list[str])
+    for key, meta_type, required, default, aliases in metadata_keys:
+        alias = find_alias(key, old_meta.keys(), aliases, ignore_failure=True)
+        if alias is None:
+            if required:
+                raise ValueError(f"Missing required metadata key {key}.")
+            value = default
+        else:
+            value = old_meta.pop(alias)
 
-    # Add in default metadata and standardize the order of the meta keys.
-    new_meta = {
-        'ra': np.nan,
-        'dec': np.nan,
-        'type': 'Unknown',
-        'redshift': np.nan,
-    }
-    new_meta.update(light_curve.meta)
+        if not isinstance(value, meta_type):
+            # Cast to the right type
+            value = meta_type(value)
+
+        new_meta[key] = value
+
+    new_meta.update(old_meta)
     light_curve.meta = new_meta
 
     return light_curve
@@ -164,7 +225,18 @@ class Dataset:
 
     @property
     def meta(self):
-        return astropy.table.Table([i.meta for i in self.light_curves])
+        meta = astropy.table.Table([i.meta for i in self.light_curves])
+
+        if meta.has_masked_values:
+            # If there are any masked columns, the column order gets messed up. Fix
+            # that.
+            col_order = [i[0] for i in metadata_keys]
+            for col in meta.colnames:
+                if col not in col_order:
+                    col_order.append(col)
+            meta = meta[col_order]
+
+        return meta
 
     def __add__(self, other):
         return type(self)(np.hstack([self.light_curves, other.light_curves]))
@@ -237,12 +309,24 @@ class Dataset:
         overwrite : bool, optional
             Whether to overwrite if there is an existing file, by default False
         """
-        from astropy.io.misc.hdf5 import write_table_hdf5
+        from astropy.io.misc.hdf5 import write_table_hdf5, read_table_hdf5
         import tables
 
-        # if append:
-            # if not os.path.exists(path):
+        if append:
+            if not os.path.exists(path):
                 # Nothing there, so just go ahead.
+                pass
+            else:
+                # There is a file there. Merge the metadata.
+                old_meta = read_table_hdf5(path, '/metadata')
+                current_meta = self.meta
+
+                # Check that there is no overlap.
+                verify_unique(old_meta['object_id'], current_meta['object_id'])
+
+                meta = astropy.table.vstack([old_meta, self.meta])
+
+                # TODO
 
         # Consolidate and write out the metadata.
         write_table_hdf5(self.meta, path, '/metadata', overwrite=overwrite,
