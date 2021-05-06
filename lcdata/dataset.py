@@ -363,7 +363,8 @@ class Dataset:
 
         return cls(meta, light_curves)
 
-    def write_hdf(self, path, append=False, overwrite=False):
+    def write_hdf(self, path, append=False, overwrite=False, object_id_itemsize=0,
+                  band_itemsize=0, zpsys_itemsize=0):
         """Write the dataset to an HDF5 file
 
         Parameters
@@ -378,71 +379,105 @@ class Dataset:
         from astropy.io.misc.hdf5 import write_table_hdf5, read_table_hdf5
         import tables
 
-        if append:
-            if not os.path.exists(path):
-                # Nothing there, so just go ahead.
-                pass
-            else:
-                # There is a file there. Merge the metadata.
+        meta = self.meta
+
+        # Figure out what we are doing.
+        if os.path.exists(path):
+            if not append and not overwrite:
+                raise OSError(f"File exists: {path}")
+            elif append:
+                # Append to an existing file. We merge the metadata and overwrite what
+                # was previously there since there can often be differences in the
+                # columns/formats. The observations are in a consistent format, so we
+                # can just append them.
                 old_meta = read_table_hdf5(path, '/metadata')
                 current_meta = self.meta
 
                 # Check that there is no overlap.
                 verify_unique(old_meta['object_id'], current_meta['object_id'])
 
+                # Stack the metadata. We rewrite it and overwrite whatever was there
+                # before.
                 meta = astropy.table.vstack([old_meta, self.meta])
-
-                # TODO
-
-        # Consolidate and write out the metadata.
-        write_table_hdf5(self.meta, path, '/metadata', overwrite=overwrite,
-                         serialize_meta=True)
-
-        # Figure out the dtype of our data.  We need to use fixed length ASCII strings
-        # in HDF5. Find the longest strings in each column to not waste unnecessary
-        # space.
-        object_id_size = 0
-        band_size = 0
-        zpsys_size = 0
-
-        for lc in self.light_curves:
-            object_id_size = max(object_id_size, len(lc.meta['object_id']))
-            band_size = max(band_size, get_str_dtype_length(lc['band'].dtype))
-            zpsys_size = max(zpsys_size, get_str_dtype_length(lc['band'].dtype))
-
-        dtype = [
-            ('object_id', f'S{object_id_size}'),
-            ('time', 'f8'),
-            ('flux', 'f8'),
-            ('fluxerr', 'f8'),
-            ('band', f'S{band_size}'),
-            ('zp', 'f4'),
-            ('zpsys', f'S{zpsys_size}'),
-        ]
-
-        # Setup an empty record array
-        length = np.sum([len(i) for i in self.light_curves])
-        data = np.recarray((length,), dtype=dtype)
-
-        start = 0
-
-        for lc in self.light_curves:
-            end = start + len(lc)
-
-            data['object_id'][start:end] = lc.meta['object_id']
-            data['time'][start:end] = lc['time']
-            data['flux'][start:end] = lc['flux']
-            data['fluxerr'][start:end] = lc['fluxerr']
-            data['band'][start:end] = lc['band']
-            data['zp'][start:end] = lc['zp']
-            data['zpsys'][start:end] = lc['zpsys']
-
-            start = end
+                overwrite = True
+            elif overwrite:
+                # If both append and overwrite are set, we append.
+                os.remove(path)
+        else:
+            # No file there, so appending is the same as writing to a new file.
+            append = False
 
         # Write out the LC data
         with tables.open_file(path, 'a') as f:
-            filters = tables.Filters(complevel=5, complib='blosc', fletcher32=True)
-            f.create_table('/', 'observations', data, filters=filters)
+            # Figure out the dtype of our data.  We need to use fixed length ASCII
+            # strings in HDF5. Find the longest strings in each column to not waste
+            # unnecessary space.
+            for lc in self.light_curves:
+                object_id_itemsize = max(object_id_itemsize, len(lc.meta['object_id']))
+                band_itemsize = max(band_itemsize,
+                                    get_str_dtype_length(lc['band'].dtype))
+                zpsys_itemsize = max(zpsys_itemsize,
+                                     get_str_dtype_length(lc['zpsys'].dtype))
+
+            if append:
+                # Make sure that the column sizes used in the file are at least as long
+                # as what we want to append.
+                obs_node = f.get_node('/observations')
+
+                for key, itemsize in (('object_id', object_id_itemsize),
+                                      ('band', band_itemsize),
+                                      ('zpsys', zpsys_itemsize)):
+                    file_itemsize = obs_node.col(key).itemsize
+                    if file_itemsize < itemsize:
+                        # TODO: handle resizing the table automatically.
+                        raise ValueError(
+                            f"File column size too small for key '{key}' "
+                            f"(file={file_itemsize}, new={itemsize}). Can't append. "
+                            f"Specify a larger value for '{key}_itemsize' when "
+                            f"initially creating the file."
+                        )
+
+                dtype = obs_node.dtype
+            else:
+                dtype = [
+                    ('object_id', f'S{object_id_itemsize}'),
+                    ('time', 'f8'),
+                    ('flux', 'f8'),
+                    ('fluxerr', 'f8'),
+                    ('band', f'S{band_itemsize}'),
+                    ('zp', 'f4'),
+                    ('zpsys', f'S{zpsys_itemsize}'),
+                ]
+
+            # Setup an empty record array
+            length = np.sum([len(i) for i in self.light_curves])
+            data = np.recarray((length,), dtype=dtype)
+
+            start = 0
+
+            for lc in self.light_curves:
+                end = start + len(lc)
+
+                data['object_id'][start:end] = lc.meta['object_id']
+                data['time'][start:end] = lc['time']
+                data['flux'][start:end] = lc['flux']
+                data['fluxerr'][start:end] = lc['fluxerr']
+                data['band'][start:end] = lc['band']
+                data['zp'][start:end] = lc['zp']
+                data['zpsys'][start:end] = lc['zpsys']
+
+                start = end
+
+            # Write out the observations.
+            if append:
+                f.get_node('/observations').append(data)
+            else:
+                filters = tables.Filters(complevel=5, complib='blosc', fletcher32=True)
+                f.create_table('/', 'observations', data, filters=filters)
+
+        # Write out the metadata
+        write_table_hdf5(meta, path, '/metadata', overwrite=True, append=True,
+                         serialize_meta=True)
 
     @classmethod
     def read_hdf(cls, path):
