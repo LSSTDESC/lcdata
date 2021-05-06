@@ -338,11 +338,14 @@ class Dataset:
         # Load the individual light curves.
         light_curves = []
         lc_data = observations.group_by('object_id')
-        for object_id, lc in zip(lc_data.groups.keys['object_id'], lc_data.groups):
+        for lc in lc_data.groups:
             lc.remove_column('object_id')
             light_curves.append(lc)
 
-        # TODO: match metadata to observations.
+        if np.any(lc_data.groups.keys['object_id'] != meta['object_id']):
+            # TODO: match metadata to observations.
+            raise ValueError("Mismatch between object_id in meta and observations. "
+                             "Can't handle.")
 
         return cls(meta, light_curves)
 
