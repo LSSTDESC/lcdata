@@ -42,7 +42,7 @@ metadata_keys = (
 def find_alias(keyword, names, aliases, ignore_failure=False):
     """Find an alias for a given keyword
 
-    Inspired by and very similar to `alias_map` in `sncosmo`.
+    Inspired by and very similar to `sncosmo.alias_map`.
 
     Parameters
     ----------
@@ -117,12 +117,57 @@ warned_default_zp = False
 warned_default_zpsys = False
 
 
+def parse_meta(meta):
+    """Parse a metadata table and get it into a standardized format.
+
+    Parameters
+    ----------
+    meta : astropy.table.Table
+        Metadata table to parse.
+    """
+    # Make a copy so that we don't mess anything up.
+    meta = meta.copy()
+
+    # Parse each key and make sure that it is in the right format.
+    for key, meta_type, required, default, aliases in metadata_keys:
+        alias = find_alias(key, meta.keys(), aliases, ignore_failure=True)
+
+        if alias is None:
+            if required:
+                raise ValueError(f"Missing required metadata key {key}.")
+            else:
+                # Key not available, set it to the default value.
+                meta[key] = default
+        elif alias != key:
+            # The key exists, but under the incorrect name. Rename it.
+            meta.rename_column(alias, key)
+
+        # Check that we have the right dtype
+        if not np.issubdtype(meta[key].dtype, meta_type):
+            # Cast to the right type
+            meta[key] = meta[key].astype(meta_type)
+
+        # All of the keys in metadata_keys are expected to be available for all light
+        # curves, so fill in missing values if we have a masked column.
+        if isinstance(meta[key], astropy.table.MaskedColumn):
+            meta[key] = meta[key].filled(default)
+
+    # Fix the column order.
+    col_order = [i[0] for i in metadata_keys]
+    for col in meta.colnames:
+        if col not in col_order:
+            col_order.append(col)
+    meta = meta[col_order]
+
+    return meta
+
+
 def parse_light_curve(light_curve):
     """Parse a light curve and get it into a standardized format.
 
     Parameters
     ----------
-    light_curve : astropy.Table
+    light_curve : astropy.table.Table
         The light curve to parse.
 
     Returns
@@ -186,60 +231,40 @@ def parse_light_curve(light_curve):
             if target != alias:
                 light_curve.rename_column(alias, target)
 
-    # Standardize the metadata
-    old_meta = light_curve.meta.copy()
-    new_meta = {}
-
-    # Drop any masked values.
-    old_meta = {k: v for k, v in old_meta.items() if not
-                isinstance(v, np.ma.core.MaskedConstant)}
-
-    # (type: Type, required: bool, default: Any, aliases: list[str])
-    for key, meta_type, required, default, aliases in metadata_keys:
-        alias = find_alias(key, old_meta.keys(), aliases, ignore_failure=True)
-        if alias is None:
-            if required:
-                raise ValueError(f"Missing required metadata key {key}.")
-            value = default
-        else:
-            value = old_meta.pop(alias)
-
-        if not isinstance(value, meta_type):
-            # Cast to the right type
-            value = meta_type(value)
-
-        new_meta[key] = value
-
-    new_meta.update(old_meta)
-    light_curve.meta = new_meta
-
     return light_curve
 
 
 class Dataset:
     """A dataset of light curves."""
-    def __init__(self, light_curves):
+    def __init__(self, meta, light_curves):
+        # Make sure that the metadata and light curves arrays are the same length.
+        if len(meta) != len(light_curves):
+            raise ValueError(f"Mismatch between metadata (length {len(meta)}) and "
+                             f"light curves (length {len(light_curves)}).")
+
+        # Parse the metadata to get it in a standardized format.
+        self.meta = parse_meta(meta)
+
         # Parse all of the light curves to get them in a standardized format.
         light_curves = [parse_light_curve(i) for i in light_curves]
         self.light_curves = np.array(light_curves, dtype=object)
 
-    @property
-    def meta(self):
-        meta = astropy.table.Table([i.meta for i in self.light_curves])
-
-        if meta.has_masked_values:
-            # If there are any masked columns, the column order gets messed up. Fix
-            # that.
-            col_order = [i[0] for i in metadata_keys]
-            for col in meta.colnames:
-                if col not in col_order:
-                    col_order.append(col)
-            meta = meta[col_order]
-
-        return meta
+        # Set up light curve metadata
+        # Turn the metadata into dictionaries that we can index. We ignore any masked
+        # columns.
+        # meta_dicts = {}
+        # for lc_meta in meta:
+            # meta_dict = {}
+            # for key, value in zip(lc_meta.keys(), lc_meta.values()):
+                # if not isinstance(value, np.ma.core.MaskedConstant):
+                    # meta_dict[key] = value
+            # meta_dicts[lc_meta['object_id']] = meta_dict
 
     def __add__(self, other):
-        return type(self)(np.hstack([self.light_curves, other.light_curves]))
+        verify_unique(self.meta['object_id'], other.meta['object_id'])
+        combined_meta = astropy.table.vstack([self.meta, other.meta])
+        combined_light_curves = np.hstack([self.light_curves, other.light_curves])
+        return Dataset(combined_meta, combined_light_curves)
 
     @classmethod
     def from_tables(cls, meta, observations):
@@ -257,25 +282,16 @@ class Dataset:
         `Dataset`
             A Dataset of light curves built from these tables.
         """
-        # Turn the metadata into dictionaries that we can index. We ignore any masked
-        # columns.
-        meta_dicts = {}
-        for lc_meta in meta:
-            meta_dict = {}
-            for key, value in zip(lc_meta.keys(), lc_meta.values()):
-                if not isinstance(value, np.ma.core.MaskedConstant):
-                    meta_dict[key] = value
-            meta_dicts[lc_meta['object_id']] = meta_dict
-
         # Load the individual light curves.
         light_curves = []
         lc_data = observations.group_by('object_id')
         for object_id, lc in zip(lc_data.groups.keys['object_id'], lc_data.groups):
-            lc.meta = meta_dicts[object_id]
             lc.remove_column('object_id')
             light_curves.append(lc)
 
-        return cls(light_curves)
+        # TODO: match metadata to observations.
+
+        return cls(meta, light_curves)
 
     @classmethod
     def from_avocado(cls, name, **kwargs):
@@ -292,10 +308,7 @@ class Dataset:
 
         meta = astropy.table.Table.from_pandas(dataset.metadata, index=True)
 
-        for i in range(len(light_curves)):
-            light_curves[i].meta = dict(meta[i])
-
-        return cls(light_curves)
+        return cls(meta, light_curves)
 
     def write_hdf(self, path, append=False, overwrite=False):
         """Write the dataset to an HDF5 file
