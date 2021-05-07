@@ -5,6 +5,9 @@ from collections import abc
 
 from .utils import warn_first_time, get_str_dtype_length, find_alias, verify_unique
 
+__all__ = ["Dataset", "LightCurveMetadata", "HDF5LightCurves", "HDF5Dataset",
+           "read_hdf5", "from_observations", "from_light_curves", "from_avocado"]
+
 
 observation_aliases = {
     # Adapted from sncosmo
@@ -280,53 +283,6 @@ class Dataset:
 
         return Dataset(meta, light_curves)
 
-    @classmethod
-    def from_tables(cls, meta, observations):
-        """Load a dataset from a metadata and an observations table.
-
-        Parameters
-        ----------
-        meta : `astropy.table.Table`
-            Table containing the metadata with one row for each light curve.
-        observations : `astropy.table.Table`
-            Table containing all of the observations.
-
-        Returns
-        -------
-        `Dataset`
-            A Dataset of light curves built from these tables.
-        """
-        lc_object_ids, light_curves = parse_observations_table(observations)
-
-        # Match the metadata to the light curves.
-        meta_map = {k: i for i, k in enumerate(meta['object_id'])}
-        meta_indices = [meta_map[i] for i in lc_object_ids]
-        meta = meta[meta_indices]
-
-        return cls(meta, light_curves)
-
-    @classmethod
-    def from_light_curves(cls, light_curves):
-        meta = astropy.table.Table([i.meta for i in light_curves])
-        return cls(meta, light_curves)
-
-    @classmethod
-    def from_avocado(cls, name, **kwargs):
-        """Load an avocado dataset"""
-        import avocado
-
-        dataset = avocado.load(name, **kwargs)
-
-        # Convert to astropy tables.
-        light_curves = []
-        for i in dataset.objects:
-            lc = astropy.table.Table.from_pandas(i.observations)
-            light_curves.append(lc)
-
-        meta = astropy.table.Table.from_pandas(dataset.metadata, index=True)
-
-        return cls(meta, light_curves)
-
     def write_hdf5(self, path, append=False, overwrite=False, object_id_itemsize=0,
                    band_itemsize=0, zpsys_itemsize=0):
         """Write the dataset to an HDF5 file
@@ -570,7 +526,54 @@ def read_hdf5(path, in_memory=True):
             obs_node = f.get_node('/observations')
             observations = astropy.table.Table(obs_node.read())
 
-        return Dataset.from_tables(meta, observations)
+        return from_observations(meta, observations)
     else:
         # Don't read all of the light curve data. It can be loaded later if needed.
         return HDF5Dataset(path, meta)
+
+
+def from_observations(meta, observations):
+    """Load a dataset from a table of all of the observations.
+
+    Parameters
+    ----------
+    meta : `astropy.table.Table`
+        Table containing the metadata with one row for each light curve.
+    observations : `astropy.table.Table`
+        Table containing all of the observations.
+
+    Returns
+    -------
+    `Dataset`
+        A Dataset of light curves built from these tables.
+    """
+    lc_object_ids, light_curves = parse_observations_table(observations)
+
+    # Match the metadata to the light curves.
+    meta_map = {k: i for i, k in enumerate(meta['object_id'])}
+    meta_indices = [meta_map[i] for i in lc_object_ids]
+    meta = meta[meta_indices]
+
+    return Dataset(meta, light_curves)
+
+
+def from_light_curves(light_curves):
+    meta = astropy.table.Table([i.meta for i in light_curves])
+    return Dataset(meta, light_curves)
+
+
+def from_avocado(name, **kwargs):
+    """Load an avocado dataset"""
+    import avocado
+
+    dataset = avocado.load(name, **kwargs)
+
+    # Convert to astropy tables.
+    light_curves = []
+    for i in dataset.objects:
+        lc = astropy.table.Table.from_pandas(i.observations)
+        light_curves.append(lc)
+
+    meta = astropy.table.Table.from_pandas(dataset.metadata, index=True)
+
+    return Dataset(meta, light_curves)
