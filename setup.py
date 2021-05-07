@@ -1,13 +1,13 @@
 from setuptools import setup
 
 setup(
-    name='lcdata',
+    name='lcdataset',
     version='0.1',
-    description=('lcdata: Tools for manipulating large datasets of astronomical '
+    description=('lcdataset: Tools for manipulating large datasets of astronomical '
                  'light curves'),
-    url='http://github.com/kboone/lcdata',
+    url='http://github.com/kboone/lcdataset',
     author='Kyle Boone',
     author_email='kyboone@uw.edu',
     license='BSD',
-    packages=['lcdata'],
+    packages=['lcdataset'],
 )

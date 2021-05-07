@@ -6,7 +6,18 @@ from collections import abc
 
 
 def get_str_dtype_length(dtype):
-    """Return the length of a string dtype handling unicode properly."""
+    """Return the length of a string dtype handling unicode properly.
+
+    Parameters
+    ----------
+    dtype : dtype
+        dtype to check
+
+    Returns
+    -------
+    int
+        length of the string
+    """
     if dtype.type == np.unicode_:
         return dtype.itemsize // 4
     else:
@@ -353,6 +364,18 @@ class Dataset:
         return len(self.meta)
 
     def __getitem__(self, key):
+        """Get a subset of the Dataset
+
+        Parameters
+        ----------
+        key : Any
+            key to use for selection, can be any index to a numpy array.
+
+        Returns
+        -------
+        Dataset
+            subset of the Dataset.
+        """
         meta = self.meta[key]
         light_curves = self.light_curves[key]
 
