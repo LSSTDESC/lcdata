@@ -2,7 +2,7 @@ import astropy
 import numpy as np
 import os
 import sys
-from collections.abc import MutableMapping
+from collections import abc
 
 
 def get_str_dtype_length(dtype):
@@ -114,11 +114,16 @@ def verify_unique(list_1, list_2, ignore_failure=False):
         return True
 
 
-warned_default_zp = False
-warned_default_zpsys = False
+warnings = set()
 
 
-class LightCurveMetadata(MutableMapping):
+def warn_first_time(key, message):
+    if key not in warnings:
+        print(f"WARNING: {message}", file=sys.stderr)
+        warnings.add(key)
+
+
+class LightCurveMetadata(abc.MutableMapping):
     """Class to handle the metadata for a light curve.
 
     This is a view into the metadata table that behaves like a dict.
@@ -262,22 +267,15 @@ def parse_light_curve(light_curve):
 
             if zp_key is None:
                 # No ZP available, default to 25.0 global warned_default_zp
-                global warned_default_zp
-                if not warned_default_zp:
-                    print("WARNING: No zeropoint specified, assuming 25.0",
-                          file=sys.stderr)
-                    warned_default_zp = True
+                warn_first_time('default_zp', 'No zeropoint specified, assuming 25.0')
                 new_light_curve['zp'] = 25.
             else:
                 new_light_curve['zp'] = light_curve[zp_key]
 
             if zpsys_key is None:
                 # No magnitude system available, default to AB
-                global warned_default_zpsys
-                if not warned_default_zpsys:
-                    print("WARNING: No magnitude system specified, assuming AB",
-                          file=sys.stderr)
-                    warned_default_zpsys = True
+                warn_first_time('default_zpsys',
+                                'No magnitude system specified, assuming AB')
                 new_light_curve['zpsys'] = 'ab'
             else:
                 new_light_curve['zpsys'] = light_curve[zpsys_key]
@@ -290,6 +288,30 @@ def parse_light_curve(light_curve):
                 light_curve.rename_column(alias, target)
 
     return light_curve
+
+
+def parse_observations_table(observations):
+    """Parse a table of observations and retrieve the individual light curves.
+
+    Parameters
+    ----------
+    observations : `astropy.table.Table`
+        Table of observations.
+
+    Returns
+    -------
+    object_ids : astropy.table.column.Column[str]
+        `object_id` values for each light curve.
+    light_curves : list[astropy.table.Table]
+        List of light curves.
+    """
+    light_curves = []
+    lc_data = observations.group_by('object_id')
+    for lc in lc_data.groups:
+        lc.remove_column('object_id')
+        light_curves.append(lc)
+
+    return lc_data.groups.keys['object_id'], light_curves
 
 
 class Dataset:
@@ -327,6 +349,15 @@ class Dataset:
         combined_light_curves = np.hstack([self.light_curves, other.light_curves])
         return Dataset(combined_meta, combined_light_curves)
 
+    def __len__(self):
+        return len(self.meta)
+
+    def __getitem__(self, key):
+        meta = self.meta[key]
+        light_curves = self.light_curves[key]
+
+        return Dataset(meta, light_curves)
+
     @classmethod
     def from_tables(cls, meta, observations):
         """Load a dataset from a metadata and an observations table.
@@ -343,18 +374,18 @@ class Dataset:
         `Dataset`
             A Dataset of light curves built from these tables.
         """
-        # Load the individual light curves.
-        light_curves = []
-        lc_data = observations.group_by('object_id')
-        for lc in lc_data.groups:
-            lc.remove_column('object_id')
-            light_curves.append(lc)
+        lc_object_ids, light_curves = parse_observations_table(observations)
 
         # Match the metadata to the light curves.
         meta_map = {k: i for i, k in enumerate(meta['object_id'])}
-        meta_indices = [meta_map[i] for i in lc_data.groups.keys['object_id']]
+        meta_indices = [meta_map[i] for i in lc_object_ids]
         meta = meta[meta_indices]
 
+        return cls(meta, light_curves)
+
+    @classmethod
+    def from_light_curves(cls, light_curves):
+        meta = astropy.table.Table([i.meta for i in light_curves])
         return cls(meta, light_curves)
 
     @classmethod
@@ -495,7 +526,7 @@ class Dataset:
                          serialize_meta=True)
 
 
-class HDF5LightCurves:
+class HDF5LightCurves(abc.Sequence):
     def __init__(self, path, meta):
         self.path = path
         self.meta = meta
@@ -503,8 +534,13 @@ class HDF5LightCurves:
     def _read_lcs(self, start_idx, end_idx):
         import tables
 
+        if start_idx is None:
+            start_idx = 0
+        if end_idx is None or end_idx > len(self):
+            end_idx = len(self)
+
         start_object_id = self.meta[start_idx]['object_id']
-        end_object_id = self.meta[end_idx]['object_id']
+        end_object_id = self.meta[end_idx - 1]['object_id']
 
         # Read the light curves.
         with tables.open_file(self.path, 'r') as f:
@@ -513,10 +549,36 @@ class HDF5LightCurves:
                 f"(object_id >= '{start_object_id}') & (object_id <= '{end_object_id}')"
             ))
 
-        return observations
+        lc_object_ids, unordered_light_curves = parse_observations_table(observations)
+
+        # Match the light curves to the metadata and preprocess them.
+        lc_map = {k: i for i, k in enumerate(lc_object_ids)}
+        light_curves = []
+        for idx in range(start_idx, end_idx):
+            meta_row = self.meta[idx]
+            lc = unordered_light_curves[lc_map[meta_row['object_id']]]
+            lc = parse_light_curve(lc)
+            lc.meta = LightCurveMetadata(meta_row)
+            light_curves.append(lc)
+
+        return light_curves
 
     def __getitem__(self, key):
-        return self._read_lcs(key, key)
+        if isinstance(key, slice):
+            if key.step is not None:
+                warn_first_time('slicing_hdf5',
+                                'Stepped slicing loads all data. Avoid it.')
+            lcs = self._read_lcs(key.start, key.stop)
+            if key.step is not None:
+                lcs = lcs[::key.step]
+            return lcs
+        elif isinstance(key, int):
+            return self._read_lcs(key, key+1)[0]
+        else:
+            raise TypeError('indices must be integers or slices.')
+
+    def __len__(self):
+        return len(self.meta)
 
 
 class HDF5Dataset(Dataset):
@@ -530,6 +592,40 @@ class HDF5Dataset(Dataset):
         super().__init__(meta)
 
         self.light_curves = HDF5LightCurves(self.path, self.meta)
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            key = slice(key, key+1)
+
+        meta = self.meta[key]
+        lcs = self.light_curves[key]
+
+        return Dataset(meta, lcs)
+
+    def count_chunks(self, chunk_size):
+        """Count the number of chunks that are in the dataset for a given chunk_size"""
+        return (len(self) - 1) // chunk_size + 1
+
+    def get_chunk(self, chunk_idx, chunk_size):
+        """Get a chunk from the dataset
+
+        Parameters
+        ----------
+        chunk_idx : int
+            Index of the chunk to retrieve.
+        chunk_size : int
+            Number of light curves per chunk.
+
+        Returns
+        -------
+        dataset : `Dataset`
+            A `Dataset` object for the given chunk with the light curves loaded.
+        """
+        return self[chunk_size * chunk_idx:chunk_size * (chunk_idx + 1)]
+
+    def iterate_chunks(self, chunk_size):
+        for chunk_idx in range(self.count_chunks(chunk_size)):
+            yield self.get_chunk(chunk_idx, chunk_size)
 
 
 def read_hdf5(path, in_memory=True):
