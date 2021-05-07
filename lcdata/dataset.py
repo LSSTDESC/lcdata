@@ -213,7 +213,11 @@ def parse_meta(meta):
             col_order.append(col)
     meta = meta[col_order]
 
-    return meta
+    # Sort by object_id
+    order = np.argsort(meta['object_id'])
+    meta = meta[order]
+
+    return meta, order
 
 
 def parse_light_curve(light_curve):
@@ -290,28 +294,32 @@ def parse_light_curve(light_curve):
 
 class Dataset:
     """A dataset of light curves."""
-    def __init__(self, meta, light_curves):
-        # Make sure that the metadata and light curves arrays are the same length.
-        if len(meta) != len(light_curves):
-            raise ValueError(f"Mismatch between metadata (length {len(meta)}) and "
-                             f"light curves (length {len(light_curves)}).")
-
+    def __init__(self, meta, light_curves=None):
         # Parse the metadata to get it in a standardized format.
-        self.meta = parse_meta(meta)
+        self.meta, order = parse_meta(meta)
 
-        # Parse all of the light curves to get them in a standardized format.
-        light_curves = [parse_light_curve(i) for i in light_curves]
+        if light_curves is not None:
+            # Make sure that the metadata and light curves arrays are the same length.
+            if len(meta) != len(light_curves):
+                raise ValueError(f"Mismatch between metadata (length {len(meta)}) and "
+                                 f"light curves (length {len(light_curves)}).")
 
-        # Load the light curves into a numpy array. Doing this directly with np.array()
-        # calls .as_array() on every Table which is not what we want. Manually loading
-        # the array works and is much faster.
-        self.light_curves = np.empty(len(light_curves), dtype=object)
-        for i in range(len(light_curves)):
-            self.light_curves[i] = light_curves[i]
+            # Parse all of the light curves to get them in a standardized format.
+            light_curves = [parse_light_curve(i) for i in light_curves]
 
-        # Set up the meta data for each light curve to point to our table.
-        for lc, meta_row in zip(self.light_curves, self.meta):
-            lc.meta = LightCurveMetadata(meta_row)
+            # Load the light curves into a numpy array. Doing this directly with
+            # np.array() calls .as_array() on every Table which is not what we want.
+            # Manually loading the array works and is much faster.
+            self.light_curves = np.empty(len(light_curves), dtype=object)
+            for i in range(len(light_curves)):
+                self.light_curves[i] = light_curves[i]
+
+            # Sort the light curves
+            self.light_curves = self.light_curves[order]
+
+            # Set up the meta data for each light curve to point to our table.
+            for lc, meta_row in zip(self.light_curves, self.meta):
+                lc.meta = LightCurveMetadata(meta_row)
 
     def __add__(self, other):
         verify_unique(self.meta['object_id'], other.meta['object_id'])
@@ -342,10 +350,10 @@ class Dataset:
             lc.remove_column('object_id')
             light_curves.append(lc)
 
-        if np.any(lc_data.groups.keys['object_id'] != meta['object_id']):
-            # TODO: match metadata to observations.
-            raise ValueError("Mismatch between object_id in meta and observations. "
-                             "Can't handle.")
+        # Match the metadata to the light curves.
+        meta_map = {k: i for i, k in enumerate(meta['object_id'])}
+        meta_indices = [meta_map[i] for i in lc_data.groups.keys['object_id']]
+        meta = meta[meta_indices]
 
         return cls(meta, light_curves)
 
@@ -366,8 +374,8 @@ class Dataset:
 
         return cls(meta, light_curves)
 
-    def write_hdf(self, path, append=False, overwrite=False, object_id_itemsize=0,
-                  band_itemsize=0, zpsys_itemsize=0):
+    def write_hdf5(self, path, append=False, overwrite=False, object_id_itemsize=0,
+                   band_itemsize=0, zpsys_itemsize=0):
         """Write the dataset to an HDF5 file
 
         Parameters
@@ -402,6 +410,10 @@ class Dataset:
                 # Stack the metadata. We rewrite it and overwrite whatever was there
                 # before.
                 meta = astropy.table.vstack([old_meta, self.meta])
+
+                # Sort the metadata by the object_id.
+                meta = meta[np.argsort(meta['object_id'])]
+
                 overwrite = True
             elif overwrite:
                 # If both append and overwrite are set, we append.
@@ -482,24 +494,65 @@ class Dataset:
         write_table_hdf5(meta, path, '/metadata', overwrite=True, append=True,
                          serialize_meta=True)
 
-    @classmethod
-    def read_hdf(cls, path):
-        """Read a dataset from an HDF5 file
 
-        Parameters
-        ----------
-        path : str
-            Path of the dataset
-        """
-        from astropy.io.misc.hdf5 import read_table_hdf5
+class HDF5LightCurves:
+    def __init__(self, path, meta):
+        self.path = path
+        self.meta = meta
+
+    def _read_lcs(self, start_idx, end_idx):
         import tables
 
-        # Consolidate and write out the metadata
-        metadata = read_table_hdf5(path, '/metadata')
+        start_object_id = self.meta[start_idx]['object_id']
+        end_object_id = self.meta[end_idx]['object_id']
 
-        # Read the light curve data
+        # Read the light curves.
+        with tables.open_file(self.path, 'r') as f:
+            obs_node = f.get_node('/observations')
+            observations = astropy.table.Table(obs_node.read_where(
+                f"(object_id >= '{start_object_id}') & (object_id <= '{end_object_id}')"
+            ))
+
+        return observations
+
+    def __getitem__(self, key):
+        return self._read_lcs(key, key)
+
+
+class HDF5Dataset(Dataset):
+    """A dataset corresponding to an HDF5 file on disk.
+
+    This class only loads the metadata by default. Accessing a light curve in the
+    dataset will read it from disk.
+    """
+    def __init__(self, path, meta):
+        self.path = path
+        super().__init__(meta)
+
+        self.light_curves = HDF5LightCurves(self.path, self.meta)
+
+
+def read_hdf5(path, in_memory=True):
+    """Read a dataset from an HDF5 file
+
+    Parameters
+    ----------
+    path : str
+        Path of the dataset
+    """
+    from astropy.io.misc.hdf5 import read_table_hdf5
+    import tables
+
+    # Read the metadata
+    meta = read_table_hdf5(path, '/metadata')
+
+    if in_memory:
+        # Read all of the light curve data
         with tables.open_file(path, 'r') as f:
             obs_node = f.get_node('/observations')
             observations = astropy.table.Table(obs_node.read())
 
-        return cls.from_tables(metadata, observations)
+        return Dataset.from_tables(meta, observations)
+    else:
+        # Don't read all of the light curve data. It can be loaded later if needed.
+        return HDF5Dataset(path, meta)
