@@ -1,3 +1,4 @@
+import os
 from setuptools import setup
 
 setup(
@@ -10,4 +11,5 @@ setup(
     author_email='kyboone@uw.edu',
     license='BSD',
     packages=['lcdata'],
+    scripts=['scripts/' + f for f in os.listdir('scripts')]
 )

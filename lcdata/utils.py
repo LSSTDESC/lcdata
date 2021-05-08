@@ -4,13 +4,13 @@ import sys
 from urllib.request import urlretrieve
 
 
-warnings = set()
+_warnings = set()
 
 
 def warn_first_time(key, message):
-    if key not in warnings:
+    if key not in _warnings:
         print(f"WARNING: {message}", file=sys.stderr)
-        warnings.add(key)
+        _warnings.add(key)
 
 
 def download_file(url, path, filesize=None):

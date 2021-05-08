@@ -1,4 +1,5 @@
 import astropy
+import astropy.table
 import numpy as np
 import os
 from collections import abc
@@ -14,7 +15,7 @@ observation_aliases = {
     'time': ('time', 'date', 'jd', 'mjd', 'mjdos', 'mjd_obs'),
     'flux': ('flux', 'f'),
     'fluxerr': ('fluxerr', 'flux_error', 'fe', 'fluxerror', 'flux_err'),
-    'band': ('band', 'bandpass', 'filter', 'flt'),
+    'band': ('band', 'bandpass', 'passband', 'filter', 'flt'),
     'zp': ('zp', 'zpt', 'zeropoint', 'zero_point'),
     'zpsys': ('zpsys', 'zpmagsys', 'magsys'),
 }
@@ -30,7 +31,8 @@ metadata_keys = {
     'dec': (float, False, None, ('dec', 'decl', 'declination', 'host_dec', 'host_decl',
                                  'host_declination', 'hostgal_dec', 'hostgal_decl',
                                  'hostgal_declination')),
-    'type': (str, False, 'Unknown', ('type', 'label', 'class', 'classification')),
+    'type': (str, False, 'Unknown', ('type', 'label', 'class', 'classification',
+                                     'true_target')),
     'redshift': (float, False, np.nan, ('redshift', 'z', 'true_z', 'host_z',
                                         'host_specz', 'hostgal_z', 'hostgal_specz')),
 }
@@ -397,7 +399,8 @@ class Dataset:
                 f.get_node('/observations').append(data)
             else:
                 filters = tables.Filters(complevel=5, complib='blosc', fletcher32=True)
-                f.create_table('/', 'observations', data, filters=filters)
+                table = f.create_table('/', 'observations', data, filters=filters)
+                table.cols.object_id.create_index()
 
         # Write out the metadata
         write_table_hdf5(meta, path, '/metadata', overwrite=True, append=True,
@@ -424,7 +427,8 @@ class HDF5LightCurves(abc.Sequence):
         with tables.open_file(self.path, 'r') as f:
             obs_node = f.get_node('/observations')
             observations = astropy.table.Table(obs_node.read_where(
-                f"(object_id >= '{start_object_id}') & (object_id <= '{end_object_id}')"
+                f"(object_id >= b'{start_object_id}') & "
+                f"(object_id <= b'{end_object_id}')"
             ))
 
         lc_object_ids, unordered_light_curves = parse_observations_table(observations)
