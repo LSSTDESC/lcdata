@@ -10,8 +10,8 @@ import astropy
 import astropy.table
 import gzip
 import os
+import time
 import numpy as np
-import tqdm
 
 import lcdata
 
@@ -72,10 +72,8 @@ def update_classes(table):
 def download_plasticc(directory):
     rawdir = os.path.join(directory, 'plasticc_raw')
 
-    print("Downloading the PLAsTiCC dataset from zenodo...\n")
+    print("Downloading the PLAsTiCC dataset from zenodo...")
     lcdata.utils.download_zenodo("2539456", rawdir)
-
-    print("\nProcessing the PLAsTiCC dataset...\n")
 
     print("Processing training dataset...")
     train_path = os.path.join(directory, 'plasticc_train.h5')
@@ -94,9 +92,10 @@ def download_plasticc(directory):
     update_classes(test_meta)
     update_object_id(test_meta)
 
-    t = tqdm.trange(1, 12, leave=True)
-    for test_idx in t:
-        t.set_description(f"Processing chunk {test_idx:02d}")
+    for test_idx in range(1, 12):
+        print(f"Processing chunk {test_idx:2d}/11...", end=' ', flush=True)
+        start_time = time.time()
+
         test_observations = read_file(
             rawdir, f'plasticc_test_lightcurves_{test_idx:02d}.csv.gz'
         )
@@ -109,6 +108,9 @@ def download_plasticc(directory):
         else:
             # Append to the current file
             dataset.write_hdf5(test_path, append=True)
+
+        elapsed_time = time.time() - start_time
+        print(f'done in {elapsed_time:.1f}s')
 
     print("\nDone!")
 
