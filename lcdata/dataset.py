@@ -373,6 +373,7 @@ class Dataset:
 
                 dtype = obs_node.dtype
             else:
+                # TODO: make this format configurable.
                 dtype = [
                     ('object_id', f'S{object_id_itemsize}'),
                     ('time', 'f8'),
