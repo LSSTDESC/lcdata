@@ -421,7 +421,7 @@ class HDF5LightCurves(abc.Sequence):
         self.path = path
         self.meta = meta
 
-    def _read_lcs(self, start_idx, end_idx):
+    def load(self, start_idx=None, end_idx=None):
         import tables
 
         if start_idx is None:
@@ -459,12 +459,12 @@ class HDF5LightCurves(abc.Sequence):
             if key.step is not None:
                 warn_first_time('slicing_hdf5',
                                 'Stepped slicing loads all data. Avoid it.')
-            lcs = self._read_lcs(key.start, key.stop)
+            lcs = self.load(key.start, key.stop)
             if key.step is not None:
                 lcs = lcs[::key.step]
             return lcs
         elif isinstance(key, int):
-            return self._read_lcs(key, key+1)[0]
+            return self.load(key, key+1)[0]
         else:
             raise TypeError('indices must be integers or slices.')
 
@@ -492,6 +492,10 @@ class HDF5Dataset(Dataset):
 
         return HDF5Dataset(self.path, meta)
 
+    def load(self):
+        """Load the current dataset into memory."""
+        return Dataset(self.meta, self.light_curves.load())
+
     def count_chunks(self, chunk_size):
         """Count the number of chunks that are in the dataset for a given chunk_size"""
         return (len(self) - 1) // chunk_size + 1
@@ -511,7 +515,7 @@ class HDF5Dataset(Dataset):
         dataset : `Dataset`
             A `Dataset` object for the given chunk with the light curves loaded.
         """
-        return self[chunk_size * chunk_idx:chunk_size * (chunk_idx + 1)]
+        return self[chunk_size * chunk_idx:chunk_size * (chunk_idx + 1)].load()
 
     def iterate_chunks(self, chunk_size):
         for chunk_idx in range(self.count_chunks(chunk_size)):
