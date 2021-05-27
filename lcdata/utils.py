@@ -7,6 +7,16 @@ from urllib.request import urlretrieve
 _warnings = set()
 
 
+try:
+    # Load tqdm if available. If not, print a message every time that it is called
+    # instead.
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterable):
+        print("Install tqdm to see a progress bar.")
+        return iterable
+
+
 def warn_first_time(key, message):
     if key not in _warnings:
         print(f"WARNING: {message}", file=sys.stderr)
@@ -119,10 +129,17 @@ def find_alias(keyword, names, aliases, ignore_failure=False):
     alias : str
         The matching alias.
     """
-    lowered_names = [i.lower() for i in names]
+    lowered_names = [i.lower().replace('_', '').replace(' ', '') for i in names]
     for alias in aliases:
-        if alias in lowered_names:
-            return alias
+        try:
+            # Figure out if a given alias is in the array, and get its index.
+            index = lowered_names.index(alias)
+
+            # Return the original name
+            return names[index]
+        except ValueError:
+            # Not available, try the next alias.
+            pass
 
     if ignore_failure:
         return None
