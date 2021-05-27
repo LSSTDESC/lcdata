@@ -11,12 +11,14 @@ __all__ = ["Dataset", "LightCurveMetadata", "HDF5LightCurves", "HDF5Dataset",
 
 
 observation_aliases = {
-    # Adapted from sncosmo
-    'time': ('time', 'date', 'jd', 'mjd', 'mjdos', 'mjd_obs'),
-    'flux': ('flux', 'f'),
-    'fluxerr': ('fluxerr', 'flux_error', 'fe', 'fluxerror', 'flux_err'),
+    # List of all of the different aliases that I have seen for different column names.
+    # Note that our matching is case insensitive, and we ignore underscores or spaces.
+    # This is adapted from sncosmo
+    'time': ('time', 'date', 'jd', 'mjd', 'mjdobs'),
+    'flux': ('flux', 'f', 'fluxcal'),
+    'fluxerr': ('fluxerr', 'fluxerror', 'fe', 'fluxcalerr', 'fluxcalerror'),
     'band': ('band', 'bandpass', 'passband', 'filter', 'flt'),
-    'zp': ('zp', 'zpt', 'zeropoint', 'zero_point'),
+    'zp': ('zp', 'zpt', 'zeropoint'),
     'zpsys': ('zpsys', 'zpmagsys', 'magsys'),
 }
 
@@ -24,17 +26,17 @@ metadata_keys = {
     # Common metadata keys to handle. This array has entries of the format:
     # (key: str, type: Type, required: bool, default: Any, aliases: list[str])
     # All of these keys are guaranteed to be in the metadata.
-    'object_id': (str, True, None, ('object_id',)),
-    'ra': (float, False, np.nan, ('ra', 'right_ascension', 'host_ra',
-                                  'host_right_ascension', 'hostgal_ra',
-                                  'hostgal_right_ascension')),
-    'dec': (float, False, None, ('dec', 'decl', 'declination', 'host_dec', 'host_decl',
-                                 'host_declination', 'hostgal_dec', 'hostgal_decl',
-                                 'hostgal_declination')),
+    'object_id': (str, True, None, ('objectid',)),
+    'ra': (float, False, np.nan, ('ra', 'rightascension', 'hostra',
+                                  'hostrightascension', 'hostgalra',
+                                  'hostgalrightascension')),
+    'dec': (float, False, None, ('dec', 'decl', 'declination', 'hostdec', 'hostdecl',
+                                 'hostdeclination', 'hostgaldec', 'hostgaldecl',
+                                 'hostgaldeclination')),
     'type': (str, False, 'Unknown', ('type', 'label', 'class', 'classification',
-                                     'true_target')),
-    'redshift': (float, False, np.nan, ('redshift', 'z', 'true_z', 'host_z',
-                                        'host_specz', 'hostgal_z', 'hostgal_specz')),
+                                     'truetarget', 'target')),
+    'redshift': (float, False, np.nan, ('redshift', 'z', 'truez', 'hostz',
+                                        'hostspecz', 'hostgalz', 'hostgalspecz')),
 }
 
 
@@ -119,7 +121,10 @@ def parse_meta(meta):
         # Check that we have the right dtype
         if not np.issubdtype(meta[key].dtype, meta_type):
             # Cast to the right type
-            meta[key] = meta[key].astype(meta_type)
+            try:
+                meta[key] = meta[key].astype(meta_type)
+            except ValueError as e:
+                raise ValueError(f"Invalid data for column {key}, {e}")
 
         # All of the keys in metadata_keys are expected to be available for all light
         # curves, so fill in missing values if we have a masked column.
