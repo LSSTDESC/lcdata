@@ -40,7 +40,7 @@ def parse_light_curve(file, metadata):
     update_bands(lc_obs)
 
     # Find the matching metadata
-    meta_match = metadata[metadata['psc_id'] == lc_meta['SNID']]
+    meta_match = metadata[metadata['object_id'] == lc_meta['SNID']]
     assert len(meta_match) == 1
     lc_obs.meta = dict(meta_match[0])
 
@@ -80,8 +80,8 @@ def download_ps1(directory):
     metadata = astropy.table.Table(
         raw_metadata,
         names=[
-            'object_id', 'psc_id', 'iau_name', 'cbet', 'ra', 'dec', 'mwebv', 'type',
-            'redshift', 'host_ra', 'host_dec', 'num_points', 'telescope',
+            'object_name', 'object_id', 'iau_name', 'cbet', 'ra', 'dec', 'mwebv',
+            'type', 'redshift', 'host_ra', 'host_dec', 'num_points', 'telescope',
             'unsupervised', 'supervised'
         ]
     )

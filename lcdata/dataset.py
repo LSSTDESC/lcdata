@@ -240,6 +240,14 @@ class Dataset:
         # Parse the metadata to get it in a standardized format.
         self.meta, order = parse_meta(meta)
 
+        # Make sure that the object_id keys are unique.
+        unique_object_ids, object_id_counts = np.unique(meta['object_id'],
+                                                        return_counts=True)
+        if len(meta) != len(unique_object_ids):
+            duplicate_object_ids = unique_object_ids[object_id_counts > 1]
+            raise ValueError(f"{len(duplicate_object_ids)} duplicate object_ids found "
+                             f"({duplicate_object_ids.data}).")
+
         if light_curves is not None:
             # Make sure that the metadata and light curves arrays are the same length.
             if len(meta) != len(light_curves):
