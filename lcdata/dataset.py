@@ -489,9 +489,8 @@ class HDF5Dataset(Dataset):
             key = slice(key, key+1)
 
         meta = self.meta[key]
-        lcs = self.light_curves[key]
 
-        return Dataset(meta, lcs)
+        return HDF5Dataset(self.path, meta)
 
     def count_chunks(self, chunk_size):
         """Count the number of chunks that are in the dataset for a given chunk_size"""
