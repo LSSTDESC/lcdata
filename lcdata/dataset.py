@@ -285,6 +285,9 @@ class Dataset:
         Dataset
             subset of the Dataset.
         """
+        if isinstance(key, int):
+            key = slice(key, key+1)
+
         meta = self.meta[key]
         light_curves = self.light_curves[key]
 
