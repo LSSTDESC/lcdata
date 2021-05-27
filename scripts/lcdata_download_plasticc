@@ -53,7 +53,7 @@ def update_classes(table):
         62: 'SNIbc',
         64: 'KN',
         65: 'M-dwarf',
-        67: 'SNIa-9abg',
+        67: 'SNIa-91bg',
         88: 'AGN',
         90: 'SNIa',
         92: 'RRL',
