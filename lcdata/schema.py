@@ -83,6 +83,23 @@ metadata_schema = {
 # - format of aliases
 
 
+def get_default_value(schema, key):
+    schema_info = schema[key]
+    if schema_info['required']:
+        if 'default' in schema_info:
+            # Required, but we have a default value. Warn that we are using it.
+            warn_first_time(
+                f'default_{key}',
+                f"Missing values for required key '{key}', assuming "
+                f"'{schema_info['default']}'."
+            )
+        else:
+            # Key is required, but not available.
+            raise ValueError(f"Key '{key}' is required.")
+
+    return schema[key]
+
+
 def find_alias(names, aliases):
     """Given a list of names, find the one that matches a list of aliases.
 
@@ -142,26 +159,17 @@ def format_table(table, schema, verbose=False):
         old_table_key = find_alias(old_columns.keys(), schema_info['aliases'])
 
         if old_table_key is None:
-            if schema_info['required']:
-                if 'default' in schema_info:
-                    # Required, but we have a default value. Warn that we are using it.
-                    warn_first_time(
-                        f'alias_{schema_key}',
-                        f"'{schema_key}' not specified, assuming "
-                        f"'{schema_info['default']}'"
-                    )
-
-                    new_table.add_column(schema_info['default'], name=schema_key)
-                else:
-                    # Key is required, but not available.
-                    raise ValueError(f"Couldn't find required key '{schema_key}'. "
-                                     f"Possible aliases {schema_info['aliases']}.")
-            else:
-                # Not required, use the default value
-                new_table.add_column(schema_info['default'], name=schema_key)
+            # Key not available. Use a default value if possible.
+            try:
+                default_value = get_default_value(schema, schema_key)
+            except ValueError:
+                raise ValueError(f"Couldn't find required key '{schema_key}'. "
+                                 f"Possible aliases {schema_info['aliases']}.")
 
             if verbose:
-                print(f"- {schema_key}: using default value '{schema_info['default']}'")
+                print(f"- {schema_key}: using default value '{default_value}'")
+
+            new_table.add_column(default_value, name=schema_key)
         else:
             if verbose:
                 print(f"- {schema_key}: using column '{old_table_key}'")
@@ -180,28 +188,21 @@ def format_table(table, schema, verbose=False):
             # schema should be available for any dataset, even if they just have the
             # default value.
             if isinstance(column, astropy.table.MaskedColumn) and column.mask.sum():
-                if 'default' not in schema_info:
-                    # No default value available.
-                    raise ValueError(f"Missing values for column '{schema_key}', but "
-                                     f"no default value available!")
-
-                if schema_info['required']:
-                    warn_first_time(
-                        f'alias_mask_{schema_key}',
-                        f"Some entries of '{schema_key}' missing, assuming "
-                        f"'{schema_info['default']}'"
-                    )
+                default_value = get_default_value(schema, schema_key)
 
                 if verbose:
                     print(f"    Filling missing values with default value "
-                          f"'{schema_info['default']}'.")
+                          f"'{default_value}'.")
 
-                column = column.filled(schema_info['default'])
+                column = column.filled(default_value)
 
             new_table.add_column(column, name=schema_key)
 
     # Add in remaining columns.
     for column in old_columns.values():
         new_table.add_column(column)
+
+    # Add metadata
+    new_table.meta = table.meta
 
     return new_table

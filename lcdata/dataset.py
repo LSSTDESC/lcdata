@@ -4,40 +4,11 @@ import numpy as np
 import os
 from collections import abc
 
-from .utils import warn_first_time, get_str_dtype_length, find_alias, verify_unique
+from . import schema
+from .utils import warn_first_time, get_str_dtype_length, verify_unique
 
 __all__ = ["Dataset", "LightCurveMetadata", "HDF5LightCurves", "HDF5Dataset",
            "read_hdf5", "from_observations", "from_light_curves", "from_avocado"]
-
-
-observation_aliases = {
-    # List of all of the different aliases that I have seen for different column names.
-    # Note that our matching is case insensitive, and we ignore underscores or spaces.
-    # This is adapted from sncosmo
-    'time': ('time', 'date', 'jd', 'mjd', 'mjdobs'),
-    'flux': ('flux', 'f', 'fluxcal'),
-    'fluxerr': ('fluxerr', 'fluxerror', 'fe', 'fluxcalerr', 'fluxcalerror'),
-    'band': ('band', 'bandpass', 'passband', 'filter', 'flt'),
-    'zp': ('zp', 'zpt', 'zeropoint'),
-    'zpsys': ('zpsys', 'zpmagsys', 'magsys'),
-}
-
-metadata_keys = {
-    # Common metadata keys to handle. This array has entries of the format:
-    # (key: str, type: Type, required: bool, default: Any, aliases: list[str])
-    # All of these keys are guaranteed to be in the metadata.
-    'object_id': (str, True, None, ('objectid',)),
-    'ra': (float, False, np.nan, ('ra', 'rightascension', 'hostra',
-                                  'hostrightascension', 'hostgalra',
-                                  'hostgalrightascension')),
-    'dec': (float, False, None, ('dec', 'decl', 'declination', 'hostdec', 'hostdecl',
-                                 'hostdeclination', 'hostgaldec', 'hostgaldecl',
-                                 'hostgaldeclination')),
-    'type': (str, False, 'Unknown', ('type', 'label', 'class', 'classification',
-                                     'truetarget', 'target')),
-    'redshift': (float, False, np.nan, ('redshift', 'z', 'truez', 'hostz',
-                                        'hostspecz', 'hostgalz', 'hostgalspecz')),
-}
 
 
 class LightCurveMetadata(abc.MutableMapping):
@@ -55,9 +26,9 @@ class LightCurveMetadata(abc.MutableMapping):
         self.meta_row[key] = value
 
     def __delitem__(self, key):
-        if key in metadata_keys:
-            # Key is required, set it to the default value.
-            self.meta_row[key] = metadata_keys[key][2]
+        if key in schema.metadata_schema:
+            # Key is in the schema, set it to the default value.
+            self.meta_row[key] = schema.get_default_value(schema.metadata_schema, key)
         else:
             # Mask out the entry to make it disappear. First, convert the column to a
             # masked one if it isn't already.
@@ -93,123 +64,6 @@ class LightCurveMetadata(abc.MutableMapping):
         return dict(self)
 
 
-def parse_meta(meta):
-    """Parse a metadata table and get it into a standardized format.
-
-    Parameters
-    ----------
-    meta : astropy.table.Table
-        Metadata table to parse.
-    """
-    # Make a copy so that we don't mess anything up.
-    meta = meta.copy()
-
-    # Parse each key and make sure that it is in the right format.
-    for key, (meta_type, required, default, aliases) in metadata_keys.items():
-        alias = find_alias(key, meta.keys(), aliases, ignore_failure=True)
-
-        if alias is None:
-            if required:
-                raise ValueError(f"Missing required metadata key {key}.")
-            else:
-                # Key not available, set it to the default value.
-                meta[key] = default
-        elif alias != key:
-            # The key exists, but under the incorrect name. Rename it.
-            meta.rename_column(alias, key)
-
-        # Check that we have the right dtype
-        if not np.issubdtype(meta[key].dtype, meta_type):
-            # Cast to the right type
-            try:
-                meta[key] = meta[key].astype(meta_type)
-            except ValueError as e:
-                raise ValueError(f"Invalid data for column {key}, {e}")
-
-        # All of the keys in metadata_keys are expected to be available for all light
-        # curves, so fill in missing values if we have a masked column.
-        if isinstance(meta[key], astropy.table.MaskedColumn):
-            meta[key] = meta[key].filled(default)
-
-    # Fix the column order.
-    col_order = list(metadata_keys.keys())
-    for col in meta.colnames:
-        if col not in col_order:
-            col_order.append(col)
-    meta = meta[col_order]
-
-    # Sort by object_id
-    order = np.argsort(meta['object_id'])
-    meta = meta[order]
-
-    return meta, order
-
-
-def parse_light_curve(light_curve):
-    """Parse a light curve and get it into a standardized format.
-
-    Parameters
-    ----------
-    light_curve : astropy.table.Table
-        The light curve to parse.
-
-    Returns
-    -------
-    parsed_light_curve
-        The parsed light curve in a standardized format.
-    """
-
-    # Standardize the observations.
-    # Check if the light curve is in our standardized format and skip all of this if it
-    # is.
-    standard_colnames = ['time', 'flux', 'fluxerr', 'band', 'zp', 'zpsys']
-    if light_curve.colnames[:len(standard_colnames)] != standard_colnames:
-        # Nope, need to move some things around.
-        required_keys = ['time', 'flux', 'fluxerr', 'band']
-        use_keys = [find_alias(i, light_curve.colnames, observation_aliases[i]) for i in
-                    required_keys]
-
-        # zp and zpsys are often missing. Default to 25 AB if that is the case which is
-        # almost always the format of supernova data.
-        zp_key = find_alias('zp', light_curve.colnames, observation_aliases['zp'],
-                            ignore_failure=True)
-        zpsys_key = find_alias('zpsys', light_curve.colnames,
-                               observation_aliases['zpsys'], ignore_failure=True)
-
-        if zp_key is not None and zpsys_key is not None:
-            # Have all keys
-            use_keys.append(zp_key)
-            use_keys.append(zpsys_key)
-            new_light_curve = light_curve[use_keys]
-        else:
-            # Missing either zeropoint or magnitude system information
-            new_light_curve = light_curve[use_keys]
-
-            if zp_key is None:
-                # No ZP available, default to 25.0 global warned_default_zp
-                warn_first_time('default_zp', 'No zeropoint specified, assuming 25.0')
-                new_light_curve['zp'] = 25.
-            else:
-                new_light_curve['zp'] = light_curve[zp_key]
-
-            if zpsys_key is None:
-                # No magnitude system available, default to AB
-                warn_first_time('default_zpsys',
-                                'No magnitude system specified, assuming AB')
-                new_light_curve['zpsys'] = 'ab'
-            else:
-                new_light_curve['zpsys'] = light_curve[zpsys_key]
-
-        light_curve = new_light_curve
-
-        # Rename non-standard columns
-        for target, alias in zip(standard_colnames, use_keys):
-            if target != alias:
-                light_curve.rename_column(alias, target)
-
-    return light_curve
-
-
 def parse_observations_table(observations):
     """Parse a table of observations and retrieve the individual light curves.
 
@@ -238,7 +92,11 @@ class Dataset:
     """A dataset of light curves."""
     def __init__(self, meta, light_curves=None):
         # Parse the metadata to get it in a standardized format.
-        self.meta, order = parse_meta(meta)
+        unordered_meta = schema.format_table(meta, schema.metadata_schema)
+
+        # Reorder the metadata
+        order = np.argsort(unordered_meta['object_id'])
+        self.meta = unordered_meta[order]
 
         # Make sure that the object_id keys are unique.
         unique_object_ids, object_id_counts = np.unique(meta['object_id'],
@@ -255,7 +113,8 @@ class Dataset:
                                  f"light curves (length {len(light_curves)}).")
 
             # Parse all of the light curves to get them in a standardized format.
-            light_curves = [parse_light_curve(i) for i in light_curves]
+            light_curves = [schema.format_table(i, schema.light_curve_schema) for i in
+                            light_curves]
 
             # Load the light curves into a numpy array. Doing this directly with
             # np.array() calls .as_array() on every Table which is not what we want.
@@ -456,7 +315,7 @@ class HDF5LightCurves(abc.Sequence):
         for idx in range(start_idx, end_idx):
             meta_row = self.meta[idx]
             lc = unordered_light_curves[lc_map[meta_row['object_id']]]
-            lc = parse_light_curve(lc)
+            lc = schema.format_table(lc, schema.light_curve_schema)
             lc.meta = LightCurveMetadata(meta_row)
             light_curves.append(lc)
 

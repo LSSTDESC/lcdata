@@ -107,46 +107,6 @@ def get_str_dtype_length(dtype):
         return dtype.itemsize
 
 
-def find_alias(keyword, names, aliases, ignore_failure=False):
-    """Find an alias for a given keyword
-
-    Inspired by and very similar to `sncosmo.alias_map`.
-
-    Parameters
-    ----------
-    keyword : str
-        Keyword to search for
-    names : list[str]
-        List of names that are available
-    aliases : list[str]
-        List of aliases to search through. The first one that is available will be
-        returned.
-    ignore_failure : bool
-        If True, raise a ValueError on failure. If False, return None
-
-    Returns
-    -------
-    alias : str
-        The matching alias.
-    """
-    lowered_names = [i.lower().replace('_', '').replace(' ', '') for i in names]
-    for alias in aliases:
-        try:
-            # Figure out if a given alias is in the array, and get its index.
-            index = lowered_names.index(alias)
-
-            # Return the original name
-            return names[index]
-        except ValueError:
-            # Not available, try the next alias.
-            pass
-
-    if ignore_failure:
-        return None
-    else:
-        raise ValueError(f"Couldn't find key {keyword}. Possible aliases {aliases}.")
-
-
 def verify_unique(list_1, list_2, ignore_failure=False):
     """Verify that two lists have no elements in common.
 
