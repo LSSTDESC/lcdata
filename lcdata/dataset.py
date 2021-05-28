@@ -163,7 +163,7 @@ def parse_light_curve(light_curve):
     # Check if the light curve is in our standardized format and skip all of this if it
     # is.
     standard_colnames = ['time', 'flux', 'fluxerr', 'band', 'zp', 'zpsys']
-    if light_curve.colnames != standard_colnames:
+    if light_curve.colnames[:len(standard_colnames)] != standard_colnames:
         # Nope, need to move some things around.
         required_keys = ['time', 'flux', 'fluxerr', 'band']
         use_keys = [find_alias(i, light_curve.colnames, observation_aliases[i]) for i in
@@ -384,9 +384,9 @@ class Dataset:
                 # TODO: make this format configurable.
                 dtype = [
                     ('object_id', f'S{object_id_itemsize}'),
-                    ('time', 'f8'),
-                    ('flux', 'f8'),
-                    ('fluxerr', 'f8'),
+                    ('time', 'f4'),
+                    ('flux', 'f4'),
+                    ('fluxerr', 'f4'),
                     ('band', f'S{band_itemsize}'),
                     ('zp', 'f4'),
                     ('zpsys', f'S{zpsys_itemsize}'),
