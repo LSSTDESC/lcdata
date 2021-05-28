@@ -97,7 +97,7 @@ def get_default_value(schema, key):
             # Key is required, but not available.
             raise ValueError(f"Key '{key}' is required.")
 
-    return schema[key]
+    return schema_info['default']
 
 
 def find_alias(names, aliases):
