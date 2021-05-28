@@ -8,7 +8,7 @@ from .utils import warn_first_time
 
 light_curve_schema = {
     'time': {
-        'dtype': np.float32,
+        'dtype': np.float64,
         'required': True,
         'aliases': ('time', 'date', 'jd', 'mjd', 'mjdobs'),
     },

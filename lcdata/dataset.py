@@ -243,7 +243,7 @@ class Dataset:
                 # TODO: make this format configurable.
                 dtype = [
                     ('object_id', f'S{object_id_itemsize}'),
-                    ('time', 'f4'),
+                    ('time', 'f8'),
                     ('flux', 'f4'),
                     ('fluxerr', 'f4'),
                     ('band', f'S{band_itemsize}'),
