@@ -60,6 +60,13 @@ class LightCurveMetadata(abc.MutableMapping):
     def __repr__(self):
         return f"{type(self).__name__}({dict(self)})"
 
+    def __copy__(self):
+        return dict(self)
+
+    def __deepcopy__(self, memo):
+        import copy
+        return copy.deepcopy(dict(self), memo)
+
     def copy(self):
         return dict(self)
 
