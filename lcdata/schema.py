@@ -36,7 +36,7 @@ light_curve_schema = {
     'zpsys': {
         'dtype': bytes,
         'required': True,
-        'default': 'AB',
+        'default': 'ab',
         'aliases': ('zpsys', 'zpmagsys', 'magsys'),
     }
 }
