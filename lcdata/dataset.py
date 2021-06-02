@@ -18,6 +18,7 @@ class LightCurveMetadata(abc.MutableMapping):
     """
     def __init__(self, meta_row):
         self.meta_row = meta_row
+        self._cache_dict = None
 
     def __getitem__(self, key):
         return self.meta_row[key]
@@ -61,14 +62,22 @@ class LightCurveMetadata(abc.MutableMapping):
         return f"{type(self).__name__}({dict(self)})"
 
     def __copy__(self):
-        return dict(self)
+        return self.copy()
 
     def __deepcopy__(self, memo):
         import copy
         return copy.deepcopy(dict(self), memo)
 
-    def copy(self):
-        return dict(self)
+    def copy(self, use_cache=False, update_cache=False):
+        if use_cache and self._cache_dict is not None and not update_cache:
+            return self._cache_dict.copy()
+
+        result = dict(self)
+
+        if use_cache or update_cache:
+            self._cache_dict = result.copy()
+
+        return result
 
 
 def parse_observations_table(observations):
