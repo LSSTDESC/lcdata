@@ -8,7 +8,8 @@ from . import schema
 from .utils import warn_first_time, get_str_dtype_length, verify_unique
 
 __all__ = ["Dataset", "LightCurveMetadata", "HDF5LightCurves", "HDF5Dataset",
-           "read_hdf5", "from_observations", "from_light_curves", "from_avocado"]
+           "read_hdf5", "from_observations", "from_light_curves", "from_avocado",
+           "to_sncosmo"]
 
 
 class LightCurveMetadata(abc.MutableMapping):
@@ -175,6 +176,11 @@ class Dataset:
         light_curves = self.light_curves[key]
 
         return Dataset(meta, light_curves)
+
+    def get_sncosmo_lc(self, idx):
+        lc = self.light_curves[idx]
+        lc = to_sncosmo(lc)
+        return lc
 
     def write_hdf5(self, path, append=False, overwrite=False, object_id_itemsize=0,
                    band_itemsize=0):
@@ -469,3 +475,16 @@ def from_avocado(name, **kwargs):
     meta = astropy.table.Table.from_pandas(dataset.metadata, index=True)
 
     return Dataset(meta, light_curves)
+
+
+def to_sncosmo(light_curve):
+    light_curve = light_curve.copy()
+
+    # Convert the band names from bytes to strings
+    light_curve['band'] = light_curve['band'].astype(str)
+
+    # Add in zeropoint information.
+    light_curve['zp'] = 25.
+    light_curve['zpsys'] = 'ab'
+
+    return light_curve
