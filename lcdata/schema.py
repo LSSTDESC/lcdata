@@ -27,18 +27,6 @@ light_curve_schema = {
         'required': True,
         'aliases': ('band', 'bandpass', 'passband', 'filter', 'flt'),
     },
-    'zp': {
-        'dtype': np.float32,
-        'required': True,
-        'default': 25.,
-        'aliases': ('zp', 'zpt', 'zeropoint'),
-    },
-    'zpsys': {
-        'dtype': bytes,
-        'required': True,
-        'default': 'ab',
-        'aliases': ('zpsys', 'zpmagsys', 'magsys'),
-    }
 }
 
 metadata_schema = {

@@ -177,7 +177,7 @@ class Dataset:
         return Dataset(meta, light_curves)
 
     def write_hdf5(self, path, append=False, overwrite=False, object_id_itemsize=0,
-                   band_itemsize=0, zpsys_itemsize=0):
+                   band_itemsize=0):
         """Write the dataset to an HDF5 file
 
         Parameters
@@ -233,8 +233,6 @@ class Dataset:
                 object_id_itemsize = max(object_id_itemsize, len(lc.meta['object_id']))
                 band_itemsize = max(band_itemsize,
                                     get_str_dtype_length(lc['band'].dtype))
-                zpsys_itemsize = max(zpsys_itemsize,
-                                     get_str_dtype_length(lc['zpsys'].dtype))
 
             if append:
                 # Make sure that the column sizes used in the file are at least as long
@@ -242,8 +240,7 @@ class Dataset:
                 obs_node = f.get_node('/observations')
 
                 for key, itemsize in (('object_id', object_id_itemsize),
-                                      ('band', band_itemsize),
-                                      ('zpsys', zpsys_itemsize)):
+                                      ('band', band_itemsize)):
                     file_itemsize = obs_node.col(key).itemsize
                     if file_itemsize < itemsize:
                         # TODO: handle resizing the table automatically.
@@ -263,8 +260,6 @@ class Dataset:
                     ('flux', 'f4'),
                     ('fluxerr', 'f4'),
                     ('band', f'S{band_itemsize}'),
-                    ('zp', 'f4'),
-                    ('zpsys', f'S{zpsys_itemsize}'),
                 ]
 
             # Setup an empty record array
@@ -281,8 +276,6 @@ class Dataset:
                 data['flux'][start:end] = lc['flux']
                 data['fluxerr'][start:end] = lc['fluxerr']
                 data['band'][start:end] = lc['band']
-                data['zp'][start:end] = lc['zp']
-                data['zpsys'][start:end] = lc['zpsys']
 
                 start = end
 
