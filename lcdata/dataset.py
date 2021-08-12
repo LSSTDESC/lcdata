@@ -22,7 +22,10 @@ class LightCurveMetadata(abc.MutableMapping):
         self._cache_dict = None
 
     def __getitem__(self, key):
-        return self.meta_row[key]
+        value = self.meta_row[key]
+        if isinstance(value, np.ma.core.MaskedConstant):
+            raise KeyError
+        return value
 
     def __setitem__(self, key, value):
         self.meta_row[key] = value
