@@ -175,15 +175,29 @@ def format_table(table, schema, verbose=False):
             # schema should be available for any dataset, even if they just have the
             # default value.
             if isinstance(column, astropy.table.MaskedColumn) and column.mask.sum():
-                # TODO: handle default_function. Right now it will fill everything in
-                # with the same value which isn't what we want...
-                default_value = get_default_value(schema, schema_key)
+                count = column.mask.sum()
+                default_value = get_default_value(schema, schema_key, count)
 
                 if verbose:
                     print(f"    Filling missing values with default value "
                           f"'{default_value}'.")
 
-                column = column.filled(default_value)
+                # If we are working with a string column, convert it to an object dtype
+                # while we're working to avoid truncation issues.
+                if column.dtype.type in (np.unicode_, np.bytes_):
+                    old_type = column.dtype.type
+                    column = column.astype(object)
+                else:
+                    old_type = None
+
+                if isinstance(default_value, list):
+                    column[column.mask] = default_value
+                    column = column.filled()
+                else:
+                    column = column.filled(default_value)
+
+                if old_type is not None:
+                    column = column.astype(old_type)
 
             new_table.add_column(column, name=schema_key)
 
