@@ -2,7 +2,7 @@ import astropy
 import astropy.table
 import numpy as np
 
-from .utils import warn_first_time
+from .utils import generate_object_id
 
 # TODO: describe the schema format
 
@@ -32,19 +32,17 @@ light_curve_schema = {
 metadata_schema = {
     'object_id': {
         'dtype': str,
-        'required': True,
+        'default_function': generate_object_id,
         'aliases': ('objectid', 'id'),
     },
     'ra': {
         'dtype': float,
-        'required': False,
         'default': np.nan,
         'aliases': ('ra', 'rightascension', 'hostra', 'hostrightascension', 'hostgalra',
                     'hostgalrightascension')
     },
     'dec': {
         'dtype': float,
-        'required': False,
         'default': np.nan,
         'aliases': ('dec', 'decl', 'declination', 'hostdec', 'hostdecl',
                     'hostdeclination', 'hostgaldec', 'hostgaldecl',
@@ -52,14 +50,12 @@ metadata_schema = {
     },
     'type': {
         'dtype': str,
-        'required': False,
         'default': 'Unknown',
         'aliases': ('type', 'label', 'class', 'classification', 'truetarget',
                     'target'),
     },
     'redshift': {
         'dtype': float,
-        'required': False,
         'default': np.nan,
         'aliases': ('redshift', 'z', 'truez', 'hostz', 'hostspecz', 'hostgalz',
                     'hostgalspecz')
@@ -71,21 +67,21 @@ metadata_schema = {
 # - format of aliases
 
 
-def get_default_value(schema, key):
+def get_default_value(schema, key, count=None):
     schema_info = schema[key]
-    if schema_info['required']:
-        if 'default' in schema_info:
-            # Required, but we have a default value. Warn that we are using it.
-            warn_first_time(
-                f'default_{key}',
-                f"Missing values for required key '{key}', assuming "
-                f"'{schema_info['default']}'."
-            )
+    if schema_info.get('required', False):
+        # Key is required, but not available.
+        raise ValueError(f"Key '{key}' is required.")
+    if 'default' in schema_info:
+        return schema_info['default']
+    if 'default_function' in schema_info:
+        if count is None:
+            return schema_info['default_function']()
         else:
-            # Key is required, but not available.
-            raise ValueError(f"Key '{key}' is required.")
-
-    return schema_info['default']
+            return [schema_info['default_function']() for i in range(count)]
+    else:
+        raise ValueError(f"Invalid schema: key '{key}' not required and no "
+                         "default value!")
 
 
 def find_alias(names, aliases):
@@ -149,7 +145,7 @@ def format_table(table, schema, verbose=False):
         if old_table_key is None:
             # Key not available. Use a default value if possible.
             try:
-                default_value = get_default_value(schema, schema_key)
+                default_value = get_default_value(schema, schema_key, len(table))
             except ValueError:
                 raise ValueError(f"Couldn't find required key '{schema_key}'. "
                                  f"Possible aliases {schema_info['aliases']}.")
@@ -157,7 +153,10 @@ def format_table(table, schema, verbose=False):
             if verbose:
                 print(f"- {schema_key}: using default value '{default_value}'")
 
-            new_table.add_column(default_value, name=schema_key)
+            if len(new_table) == 0 and not isinstance(default_value, list):
+                new_table.add_column([default_value] * len(table), name=schema_key)
+            else:
+                new_table.add_column(default_value, name=schema_key)
         else:
             if verbose:
                 print(f"- {schema_key}: using column '{old_table_key}'")
@@ -176,6 +175,8 @@ def format_table(table, schema, verbose=False):
             # schema should be available for any dataset, even if they just have the
             # default value.
             if isinstance(column, astropy.table.MaskedColumn) and column.mask.sum():
+                # TODO: handle default_function. Right now it will fill everything in
+                # with the same value which isn't what we want...
                 default_value = get_default_value(schema, schema_key)
 
                 if verbose:

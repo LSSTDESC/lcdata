@@ -119,18 +119,18 @@ class Dataset:
         self.meta = unordered_meta[order]
 
         # Make sure that the object_id keys are unique.
-        unique_object_ids, object_id_counts = np.unique(meta['object_id'],
+        unique_object_ids, object_id_counts = np.unique(self.meta['object_id'],
                                                         return_counts=True)
-        if len(meta) != len(unique_object_ids):
+        if len(self.meta) != len(unique_object_ids):
             duplicate_object_ids = unique_object_ids[object_id_counts > 1]
             raise ValueError(f"{len(duplicate_object_ids)} duplicate object_ids found "
                              f"({duplicate_object_ids.data}).")
 
         if light_curves is not None:
             # Make sure that the metadata and light curves arrays are the same length.
-            if len(meta) != len(light_curves):
-                raise ValueError(f"Mismatch between metadata (length {len(meta)}) and "
-                                 f"light curves (length {len(light_curves)}).")
+            if len(self.meta) != len(light_curves):
+                raise ValueError(f"Mismatch between metadata (length {len(self.meta)}) "
+                                 f"and light curves (length {len(light_curves)}).")
 
             # Parse all of the light curves to get them in a standardized format.
             light_curves = [schema.format_table(i, schema.light_curve_schema) for i in
