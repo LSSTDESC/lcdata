@@ -459,7 +459,14 @@ def from_observations(meta, observations):
 
 
 def from_light_curves(light_curves):
-    meta = astropy.table.Table([i.meta for i in light_curves])
+    try:
+        meta = astropy.table.Table([i.meta for i in light_curves])
+    except TypeError:
+        # Metadata is empty for everything. Create an empty table.
+        meta = astropy.table.Table({
+            'object_id': astropy.table.MaskedColumn(np.zeros(len(light_curves)),
+                                                    mask=np.ones(len(light_curves)))
+        })
     return Dataset(meta, light_curves)
 
 
