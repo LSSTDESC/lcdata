@@ -8,7 +8,7 @@ from . import schema
 from .utils import warn_first_time, get_str_dtype_length, verify_unique
 
 __all__ = ["Dataset", "LightCurveMetadata", "HDF5LightCurves", "HDF5Dataset",
-           "read_hdf5", "from_observations", "from_light_curves", "from_avocado",
+           "from_hdf5", "from_observations", "from_light_curves", "from_avocado",
            "to_sncosmo"]
 
 
@@ -407,7 +407,7 @@ class HDF5Dataset(Dataset):
             yield self.get_chunk(chunk_idx, chunk_size)
 
 
-def read_hdf5(path, in_memory=True):
+def from_hdf5(path, in_memory=True):
     """Read a dataset from an HDF5 file
 
     Parameters

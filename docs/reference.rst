@@ -18,20 +18,17 @@ Datasets
 .. autosummary::
    :toctree: api
 
-   read_hdf5
    from_light_curves
-   from_avocado
    from_observations
+   from_hdf5
+   from_avocado
 
 *Writing a dataset*
 
 .. autosummary::
    :toctree: api
 
-   read_hdf5
-   from_light_curves
-   from_avocado
-   from_observations
+   to_hdf5
 
 Utilities
 =========
