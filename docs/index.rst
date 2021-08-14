@@ -17,19 +17,13 @@ lcdata also contains tools to download different publicly available releases of
 astronomical time series.
 
 
-.. _installation:
+.. toctree::
+   :maxdepth: 1
+   :titlesonly:
 
-Installation
-------------
+   installation
+   usage
 
-lcdata is compatible with Python 3.6+.
-
-TODO
-
-Usage
------
-
-TODO
 
 .. toctree::
    :maxdepth: 1

@@ -23,13 +23,6 @@ Datasets
    from_avocado
    read_hdf5
 
-*Writing a dataset*
-
-.. autosummary::
-   :toctree: api
-
-   write_hdf5
-
 Utilities
 =========
 
