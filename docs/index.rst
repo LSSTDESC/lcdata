@@ -23,22 +23,6 @@ astronomical time series.
 
    installation
    usage
-
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Contents:
-
-
-.. toctree::
-   :maxdepth: 2
-
    reference
 
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+Source code: https://github.com/kboone/lcdata
