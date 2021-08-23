@@ -1,18 +1,26 @@
-name: CI
+name: Tests
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 jobs:
   tests:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - name: Tests
+          - name: Build the docs
             os: ubuntu-latest
             python: 3.9
-            toxenv: py39
+            toxenv: build_docs
+
+          - name: Python 3.9 with full coverage
+            os: ubuntu-latest
+            python: 3.9
+            toxenv: py39-cov
 
     steps:
       - name: Checkout code
@@ -25,3 +33,8 @@ jobs:
         run: python -m pip install --upgrade tox
       - name: Run tests
         run: tox -e ${{ matrix.toxenv }}
+      - name: Upload coverage to codecov
+        if: contains(matrix.toxenv,'-cov')
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.xml

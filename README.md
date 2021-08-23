@@ -2,7 +2,8 @@
 
 Tools for manipulating large datasets of astronomical light curves
 
-[![Documentation Status](https://readthedocs.org/projects/lcdata/badge/?version=latest)](https://lcdata.readthedocs.io/en/latest/?badge=latest) [![Actions Status](https://github.com/kboone/lcdata/workflows/CI/badge.svg)](https://github.com/kboone/lcdata/actions)
+[![Build Status](https://github.com/kboone/lcdata/workflows/run_tests.yml/badge.svg)](https://github.com/kboone/lcdata/actions/workflows/run_tests.yml)
+[![Documentation Status](https://readthedocs.org/projects/lcdata/badge/?version=latest)](https://lcdata.readthedocs.io/en/latest/?badge=latest)
 
 ## About
 
