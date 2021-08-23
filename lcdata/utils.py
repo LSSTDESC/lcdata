@@ -1,20 +1,11 @@
 import numpy as np
 import os
+import requests
 import sys
-from urllib.request import urlretrieve
+from tqdm import tqdm
 
 
 _warnings = set()
-
-
-try:
-    # Load tqdm if available. If not, print a message every time that it is called
-    # instead.
-    from tqdm import tqdm
-except ImportError:
-    def tqdm(iterable):
-        print("Install tqdm to see a progress bar.")
-        return iterable
 
 
 def warn_first_time(key, message):
@@ -38,41 +29,24 @@ def download_file(url, path, filesize=None):
                   os.path.basename(path))
             os.remove(path)
 
-    try:
-        from tqdm import tqdm
-    except ImportError:
-        tqdm = None
+    # Make sure that the directory exists.
+    os.makedirs(os.path.dirname(path), exist_ok=True)
 
-    if tqdm is not None:
-        # Download with a progress bar.
-        class TqdmUpTo(tqdm):
-            """Provides `update_to(n)` which uses `tqdm.update(delta_n)`."""
-            def update_to(self, b=1, bsize=1, tsize=None):
-                """
-                b  : int, optional
-                    Number of blocks transferred so far [default: 1].
-                bsize  : int, optional
-                    Size of each block (in tqdm units) [default: 1].
-                tsize  : int, optional
-                    Total size (in tqdm units). If [default: None] remains unchanged.
-                """
-                if tsize is not None:
-                    self.total = tsize
-                self.update(b * bsize - self.n)  # will also set self.n = b * bsize
-
-        with TqdmUpTo(unit='B', unit_scale=True, miniters=1,
-                      desc=url.split('/')[-1]) as t:  # all optional kwargs
-            urlretrieve(url, filename=path, reporthook=t.update_to, data=None)
-    else:
-        # Download without a progress bar.
-        print(f"Downloading {url}...")
-        print("Install tqdm to see a progress bar.")
-        urlretrieve(url, filename=path, data=None)
+    # Download with a progress bar.
+    with requests.get(url, stream=True) as response:
+        response.raise_for_status()
+        total_size = int(response.headers.get('content-length'))
+        chunk_size = 128 * 1024
+        progress_bar = tqdm(total=total_size, unit='B', unit_scale=True,
+                            desc=url.split('/')[-1])
+        with open(path, 'wb') as out_file:
+            for chunk in response.iter_content(chunk_size):
+                progress_bar.update(len(chunk))
+                out_file.write(chunk)
+        progress_bar.close()
 
 
 def download_zenodo(record, basedir):
-    import requests
-
     # Make the download directory if it doesn't exist.
     os.makedirs(basedir, exist_ok=True)
 

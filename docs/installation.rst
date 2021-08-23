@@ -4,11 +4,13 @@ Installation
 
 lcdata requires Python 3.6+ and depends on the following Python packages:
 
-- `numpy <http://www.numpy.org/>`_
 - `astropy <http://www.astropy.org>`_
-- `pytables <http://www.pytables.org/>`_
 - `h5py <https://www.h5py.org/>`_
+- `numpy <http://www.numpy.org/>`_
+- `pytables <http://www.pytables.org/>`_
 - `pyyaml <https://pyyaml.org/>`_
+- `requests <https://python-requests.org/>`_
+- `tqdm <https://github.com/tqdm/tqdm>`_
 
 Install using pip (recommended)
 ===============================
