@@ -46,6 +46,11 @@ def test_get_default_value(schema):
     assert val == 'test'
 
 
+def test_get_default_value_missing(schema):
+    with pytest.raises(KeyError):
+        lcdata.schema.get_default_value(schema, 'd')
+
+
 def test_get_default_value_required(schema):
     with pytest.raises(ValueError):
         lcdata.schema.get_default_value(schema, 'a')
@@ -112,10 +117,22 @@ def test_format_table_reorder(table, schema):
     assert_same_table(table, format_table)
 
 
+def test_format_table_required(table, schema):
+    del table['a']
+    with pytest.raises(ValueError):
+        lcdata.schema.format_table(table, schema, verbose=True)
+
+
 def test_format_table_default(table, schema):
     del table['b']
     format_table = lcdata.schema.format_table(table, schema, verbose=True)
     assert format_table['b'][0] == 'test'
+
+
+def test_format_table_default_function(table, schema):
+    del table['c']
+    format_table = lcdata.schema.format_table(table, schema, verbose=True)
+    assert all(format_table['c'] == [1, 2, 3])
 
 
 def test_format_table_dtype(table, schema):
@@ -131,6 +148,6 @@ def test_format_table_masked(table, schema):
 
 
 def test_format_table_masked_function(table, schema):
-    table['c'] = MaskedColumn([0, 0, 0], mask=[True, True, False])
+    table['c'] = MaskedColumn([0, 0, 0], mask=[True, False, True])
     format_table = lcdata.schema.format_table(table, schema, verbose=True)
-    assert all(format_table['c'] == [1, 2, 0])
+    assert all(format_table['c'] == [1, 0, 2])
