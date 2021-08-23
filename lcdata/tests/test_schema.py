@@ -1,4 +1,5 @@
-from astropy.table import Table
+from astropy.table import Table, MaskedColumn
+import numpy as np
 import pytest
 
 import lcdata
@@ -14,17 +15,17 @@ def schema():
 
     return {
         'a': {
-            'dtype': float,
+            'dtype': np.float64,
             'required': True,
             'aliases': ('a', 'aa'),
         },
         'b': {
-            'dtype': str,
+            'dtype': bytes,
             'default': 'test',
             'aliases': ('b', 'bb'),
         },
         'c': {
-            'dtype': int,
+            'dtype': np.int32,
             'default_function': default_function,
             'aliases': ('c', 'cc'),
         },
@@ -34,9 +35,9 @@ def schema():
 @pytest.fixture
 def table():
     return Table({
-        'a': [0., 1., 2.],
-        'b': ['x', 'y', 'z'],
-        'c': [10, 20, 30],
+        'a': np.array([0., 1., 2.], dtype=np.float64),
+        'b': np.array(['x', 'y', 'z'], dtype=bytes),
+        'c': np.array([10, 20, 30], dtype=np.int32),
     })
 
 
@@ -115,3 +116,21 @@ def test_format_table_default(table, schema):
     del table['b']
     format_table = lcdata.schema.format_table(table, schema, verbose=True)
     assert format_table['b'][0] == 'test'
+
+
+def test_format_table_dtype(table, schema):
+    table['a'] = table['a'].astype(int)
+    format_table = lcdata.schema.format_table(table, schema, verbose=True)
+    assert format_table['a'].dtype.type is np.float64
+
+
+def test_format_table_masked(table, schema):
+    table['b'] = MaskedColumn(['hi', 'hi', 'hi'], mask=[True, False, False])
+    format_table = lcdata.schema.format_table(table, schema, verbose=True)
+    assert format_table['b'][0] == 'test'
+
+
+def test_format_table_masked_function(table, schema):
+    table['c'] = MaskedColumn([0, 0, 0], mask=[True, True, False])
+    format_table = lcdata.schema.format_table(table, schema, verbose=True)
+    assert all(format_table['c'] == [1, 2, 0])
