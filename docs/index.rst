@@ -23,6 +23,7 @@ astronomical time series.
 
    installation
    usage
+   datasets
    reference
 
 Source code: https://github.com/kboone/lcdata

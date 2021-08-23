@@ -6,15 +6,13 @@ Overview
 ========
 
 lcdata is designed to handle large datasets of light curves. Light curves are
-represented as tables in `~astropy.table.Table` format, and are very similar to the
+represented as tables in ``~astropy.table.Table`` format, and are very similar to the
 ones used in sncosmo. A dataset can be created in several ways. For example, we can
 create a dataset from a list of sncosmo-like light curves:
 
     >>> import lcdata
     >>> import sncosmo
-
     >>> light_curves = [sncosmo.load_example_data() for i in range(5)]
-
     >>> dataset = lcdata.from_light_curves(light_curves)
 
 The individual light curves in this dataset can be accessed as ``dataset.light_curves``.
@@ -23,7 +21,7 @@ Metadata
 ========
 
 The metadata associated with all of the light curves can be accessed from a common
-`~astropy.table.Table` as ``dataset.meta``:
+``~astropy.table.Table`` as ``dataset.meta``:
 
     >>> dataset.meta
           object_id        ra dec   type  redshift  x1  c          x0           t0  

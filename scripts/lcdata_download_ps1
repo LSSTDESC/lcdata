@@ -107,7 +107,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Download the PS1 dataset from Zenodo."
     )
-    parser.add_argument('directory')
+    parser.add_argument('--directory', default='./data/')
 
     args = parser.parse_args()
     download_ps1(args.directory)
