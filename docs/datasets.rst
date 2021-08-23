@@ -13,9 +13,9 @@ PLAsTiCC    ``lcdata_download_plasticc`` `PLAsTiCC <https://plasticc.org>`_
 PanSTARRS-1 ``lcdata_download_ps1``      `Villar et al. 2020 <https://ui.adsabs.harvard.edu/abs/2020ApJ...905...94V>`_
 =========== ============================ =============================================================================
 
-Running these scripts will download the corresponding dataset(s). By default, these will
-be placed in ``./data/``, although the location can be changed with the ``--directory``
-flag.
+After installing lcdata, these scripts can be run from any directory on the command
+line to download the corresponding dataset(s). By default, these will be placed in
+``./data/``, although the location can be changed with the ``--directory`` flag.
 
 Using downloaded datasets
 =========================
