@@ -235,9 +235,9 @@ class Dataset:
         path : str
             Output path to write to
         append : bool, optional
-            Whether to append if there is an existing file, by default False
+            Whether to append if there is an existing file, default False
         overwrite : bool, optional
-            Whether to overwrite if there is an existing file, by default False
+            Whether to overwrite if there is an existing file, default False
         object_id_itemsize : int, optional
             Width to use for the object_id string column. Inferred from the longest
             string if not specified.
@@ -366,6 +366,20 @@ class HDF5LightCurves(abc.Sequence):
         self.meta = meta
 
     def load(self, start_idx=None, end_idx=None):
+        """Load a series of light curves into memory
+
+        Parameters
+        ----------
+        start_idx : int, optional
+            Start of the slice to load, default 0 (the first element)
+        end_idx : int, optional
+            End of the slice to load, default the last element.
+
+        Returns
+        -------
+        List[`~astropy.table.Table`]
+            List of light curves.
+        """
         import tables
 
         if start_idx is None:
@@ -421,6 +435,16 @@ class HDF5Dataset(Dataset):
 
     This class only loads the metadata by default. Accessing a light curve in the
     dataset will read it from disk.
+
+    Typically you won't want to use this class directly. Instead, call
+    `lcdata.read_hdf5` with ``in_memory`` set to False to read a file.
+
+    Parameters
+    ----------
+    path : str
+        Path to the file.
+    meta : `~astropy.table.Table`
+        Metadata table.
     """
     def __init__(self, path, meta):
         self.path = path
@@ -456,7 +480,7 @@ class HDF5Dataset(Dataset):
 
         Returns
         -------
-        dataset : `Dataset`
+        `Dataset`
             A `Dataset` object for the given chunk with the light curves loaded.
         """
         return self[chunk_size * chunk_idx:chunk_size * (chunk_idx + 1)].load()
@@ -473,6 +497,7 @@ def read_hdf5(path, in_memory=True):
     ----------
     path : str
         Path of the dataset
+    in_memory : bool
     """
     from astropy.io.misc.hdf5 import read_table_hdf5
     import tables
@@ -497,9 +522,9 @@ def from_observations(meta, observations):
 
     Parameters
     ----------
-    meta : `astropy.table.Table`
+    meta : `~astropy.table.Table`
         Table containing the metadata with one row for each light curve.
-    observations : `astropy.table.Table`
+    observations : `~astropy.table.Table`
         Table containing all of the observations.
 
     Returns
@@ -518,6 +543,18 @@ def from_observations(meta, observations):
 
 
 def from_light_curves(light_curves):
+    """Load a dataset from a list of light curves.
+
+    Parameters
+    ----------
+    light_curves : List[`~astropy.table.Table`]
+        List of light curves
+
+    Returns
+    -------
+    `Dataset`
+        Dataset containing all of these light curves.
+    """
     try:
         meta = astropy.table.Table([i.meta for i in light_curves])
     except TypeError:
@@ -530,7 +567,18 @@ def from_light_curves(light_curves):
 
 
 def from_avocado(name, **kwargs):
-    """Load an avocado dataset"""
+    """Load a dataset from avocado.
+
+    Parameters
+    ----------
+    name : str
+        Name of the dataset to load.
+
+    Returns
+    -------
+    `Dataset`
+        the loaded dataset in lcdata format.
+    """
     import avocado
 
     dataset = avocado.load(name, **kwargs)
@@ -547,6 +595,21 @@ def from_avocado(name, **kwargs):
 
 
 def to_sncosmo(light_curve):
+    """Convert a light curve to sncosmo format.
+
+    This adds the zp and zpsys keys that are required by sncosmo, and converts the band
+    name to a string instead of the bytes type used internally.
+
+    Parameters
+    ----------
+    light_curve : `~astropy.table.Table`
+        Light curve in lcdata format.
+
+    Returns
+    -------
+    `~astropy.table.Table`
+        Light curve in sncosmo format.
+    """
     light_curve = light_curve.copy()
 
     # Convert the band names from bytes to strings

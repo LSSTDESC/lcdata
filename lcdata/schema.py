@@ -124,6 +124,28 @@ def verify_schema(schema):
 
 
 def get_default_value(schema, key, count=None):
+    """Get the default value for a key in a schema.
+
+    Parameters
+    ----------
+    schema : dict[dict]
+        Schema to compare to
+    key : str
+        Key to look for in the schema.
+    count : int, optional
+        For default functions that return different values, the number of values to
+        return. By default, only a single value is returned.
+
+    Returns
+    -------
+    default_value
+        The default value parsed from the schema.
+
+    Raises
+    ------
+    ValueError
+        If a default value does not exist for this key in the schema.
+    """
     schema_info = schema[key]
     if schema_info.get('required', False):
         # Key is required, but not available.
@@ -167,6 +189,27 @@ def find_alias(names, aliases):
 
 
 def format_table(table, schema, verbose=False):
+    """Format a table with a given schema.
+
+    Parameters
+    ----------
+    table : `~astropy.table.Table`
+        Table to format
+    schema : dict[dict]
+        Schema to use for formatting
+    verbose : bool, optional
+        Whether to print debugging messages, by default False
+
+    Returns
+    -------
+    `~astropy.table.Table`
+        Formatted table
+
+    Raises
+    ------
+    ValueError
+        If there are required keys in the schema that are missing in the table.
+    """
     # First, check if the table is in the right format already.
     if len(table.columns) >= len(schema):
         for table_col, (schema_key, schema_info) in zip(

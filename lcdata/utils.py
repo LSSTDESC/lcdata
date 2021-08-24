@@ -15,8 +15,20 @@ def warn_first_time(key, message):
 
 
 def download_file(url, path, filesize=None):
-    """Download a file with a tqdm progress bar. This code is adapted from an
-    example in the tqdm documentation.
+    """Download a file with a tqdm progress bar.
+
+    This will check if the file already exists, and skip it if it does. If the filesize
+    is known, this function verifies that the function on disk has the right size, and
+    redownloads it if it doesn't.
+
+    Parameters
+    ----------
+    url : str
+        URL to download from
+    path : str
+        Path on disk to download the file to.
+    filesize : int, optional
+        Size of the file (if known), by default None
     """
     # Check if the file already exists, and don't download it if it does.
     if os.path.exists(path):
@@ -47,6 +59,15 @@ def download_file(url, path, filesize=None):
 
 
 def download_zenodo(record, basedir):
+    """Download a record from Zenodo.
+
+    Parameters
+    ----------
+    record : str
+        Zenodo record number.
+    basedir : str
+        Directory to download the record to.
+    """
     # Make the download directory if it doesn't exist.
     os.makedirs(basedir, exist_ok=True)
 
