@@ -15,7 +15,13 @@ __all__ = ["Dataset", "LightCurveMetadata", "HDF5LightCurves", "HDF5Dataset",
 class LightCurveMetadata(abc.MutableMapping):
     """Class to handle the metadata for a light curve.
 
-    This is a view into the metadata table that behaves like a dict.
+    This is a view into the metadata table that behaves like a dict. Modifying it will
+    update the underlying metadata table.
+
+    Parameters
+    ----------
+    meta_row : `~astropy.table.Row`
+        Row in the metadata table corresponding to a single light curve.
     """
     def __init__(self, meta_row):
         self.meta_row = meta_row
@@ -89,14 +95,14 @@ def parse_observations_table(observations):
 
     Parameters
     ----------
-    observations : `astropy.table.Table`
+    observations : `~astropy.table.Table`
         Table of observations.
 
     Returns
     -------
-    object_ids : astropy.table.column.Column[str]
+    object_ids : `~astropy.table.Column`[str]
         `object_id` values for each light curve.
-    light_curves : list[astropy.table.Table]
+    light_curves : list[`~astropy.table.Table`]
         List of light curves.
     """
     light_curves = []
@@ -109,7 +115,15 @@ def parse_observations_table(observations):
 
 
 class Dataset:
-    """A dataset of light curves."""
+    """A dataset of light curves.
+
+    Parameters
+    ----------
+    meta : `~astropy.table.Table`
+        Metadata table.
+    light_curves : List[`~astropy.table.Table`], optional
+        List of light curves where each light curve is represented by an astropy Table.
+    """
     def __init__(self, meta, light_curves=None):
         # Parse the metadata to get it in a standardized format.
         unordered_meta = schema.format_table(meta, schema.metadata_schema)
@@ -151,6 +165,21 @@ class Dataset:
                 lc.meta = LightCurveMetadata(meta_row)
 
     def __add__(self, other):
+        """Combine two datasets.
+
+        This concatenates the two datasets. There cannot be any overlap in the datasets
+        or objects with the same `object_id`.
+
+        Parameters
+        ----------
+        other : `~lcdata.Dataset`
+            Dataset to combine this one with
+
+        Returns
+        -------
+        combined_dataset: `~lcdata.Dataset`
+            Combined dataset
+        """
         verify_unique(self.meta['object_id'], other.meta['object_id'])
         combined_meta = astropy.table.vstack([self.meta, other.meta])
         combined_light_curves = np.hstack([self.light_curves, other.light_curves])
@@ -181,6 +210,18 @@ class Dataset:
         return Dataset(meta, light_curves)
 
     def get_sncosmo_lc(self, idx):
+        """Get a light curve in sncosmo format.
+
+        Parameters
+        ----------
+        idx : int
+            Index of the light curve to retrieve.
+
+        Returns
+        -------
+        `~astropy.table.Table`
+            Light curve in sncosmo format.
+        """
         lc = self.light_curves[idx]
         lc = to_sncosmo(lc)
         return lc
@@ -197,6 +238,12 @@ class Dataset:
             Whether to append if there is an existing file, by default False
         overwrite : bool, optional
             Whether to overwrite if there is an existing file, by default False
+        object_id_itemsize : int, optional
+            Width to use for the object_id string column. Inferred from the longest
+            string if not specified.
+        band_itemsize : int, optional
+            Width to use for the band string column. Inferred from the longest string if
+            not specified.
         """
         from astropy.io.misc.hdf5 import write_table_hdf5, read_table_hdf5
         import tables
@@ -302,6 +349,18 @@ class Dataset:
 
 
 class HDF5LightCurves(abc.Sequence):
+    """Class to interface with light curves in an HDF5 file on disk.
+
+    The light curves are kept on disk, and only loaded into memory when explicitly asked
+    for.
+
+    Parameters
+    ----------
+    path : str
+        Path to the HDF5 file on disk.
+    meta : `~astropy.table.Table`
+        Metadata table for the dataset.
+    """
     def __init__(self, path, meta):
         self.path = path
         self.meta = meta
