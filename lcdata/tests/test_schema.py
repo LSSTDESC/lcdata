@@ -1,3 +1,4 @@
+from lcdata.schema import verify_schema
 from astropy.table import Table, MaskedColumn
 import numpy as np
 import pytest
@@ -157,3 +158,45 @@ def test_format_table_masked_function(table, schema):
     table['c'] = MaskedColumn([0, 0, 0], mask=[True, False, True])
     format_table = lcdata.schema.format_table(table, schema, verbose=True)
     assert all(format_table['c'] == [1, 0, 2])
+
+
+def test_verify_schema(schema):
+    verify_schema(schema)
+
+
+def test_verify_schema_missing_dtype(schema):
+    del schema['a']['dtype']
+    with pytest.raises(ValueError):
+        verify_schema(schema)
+
+
+def test_verify_schema_missing_aliases(schema):
+    del schema['a']['aliases']
+    with pytest.raises(ValueError):
+        verify_schema(schema)
+
+
+def test_verify_schema_missing_key_aliases(schema):
+    schema['a']['aliases'] = ['bad']
+    with pytest.raises(ValueError):
+        verify_schema(schema)
+
+
+def test_verify_schema_bad_aliases(schema):
+    schema['a']['aliases'] = ['a_a']
+    with pytest.raises(ValueError):
+        verify_schema(schema)
+
+
+def test_verify_schema_key_type(schema):
+    del schema['a']['required']
+    with pytest.raises(ValueError):
+        verify_schema(schema)
+
+
+def test_light_curve_schema():
+    lcdata.schema.verify_schema(lcdata.schema.light_curve_schema)
+
+
+def test_metadata_schema():
+    lcdata.schema.verify_schema(lcdata.schema.metadata_schema)

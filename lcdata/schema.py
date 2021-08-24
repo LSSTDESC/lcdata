@@ -4,7 +4,20 @@ import numpy as np
 
 from .utils import generate_object_id
 
-# TODO: describe the schema format
+"""This module describes and verifies schemas for astropy Tables.
+
+A schema is a dictionary of keys, each of which represents one column in the table.
+Each key in the schema much have the following attributes specified:
+- dtype: the numpy dtype to use.
+- aliases: a list of aliases for the key when formatting a new table. This should
+    include the name of the key itself. The aliases should all be lowercase with no
+    whitespace or underscores.
+- One of the following entries representing the key type:
+    - required: set to True if the key is required.
+    - default: the default value for the column if it is missing.
+    - default_function: A function to call to get the default value. The function can
+        return different things every time that it is called.
+"""
 
 light_curve_schema = {
     'time': {
@@ -62,9 +75,52 @@ metadata_schema = {
     },
 }
 
-# TODO: verify schema.
-# - combinations of required and default
-# - format of aliases
+
+def verify_schema(schema):
+    """Verify a schema
+
+    Parameters
+    ----------
+    schema : dict[dict]
+        Schema to verify. See `schema.py` for details.
+
+    Raises
+    ------
+    ValueError
+        For any noncomplient schemas. The error message will describe what part of the
+        schema is invalid.
+    """
+    for key, key_schema in schema.items():
+        # Make sure that the dtype is specified.
+        if 'dtype' not in key_schema:
+            raise ValueError(f"Invalid schema: key '{key}' missing dtype.")
+
+        # Make sure that the aliases are in the correct format.
+        if 'aliases' not in key_schema:
+            raise ValueError(f"Invalid schema: key '{key}' missing aliases.")
+
+        aliases = key_schema['aliases']
+
+        if not find_alias([key], aliases):
+            raise ValueError(f"Invalid schema: key '{key}' doesn't match aliases "
+                             f"{aliases}")
+
+        for alias in aliases:
+            parse_alias = alias.lower().replace('_', '').replace(' ', '')
+            if parse_alias != alias:
+                raise ValueError(f"Invalid schema: alias '{alias}' for key '{key}' "
+                                 f"should be '{parse_alias}'")
+
+        # Make sure that the key type is specified.
+        if ('required' not in key_schema
+                and 'default' not in key_schema
+                and 'default_function' not in key_schema):
+            raise ValueError("Invalid schema: must specify one of [required, default, "
+                             f"default_function for key '{key}'")
+
+        # Make sure that they are no extra keys.
+        if len(key_schema) != 3:
+            raise ValueError(f"Invalid schema: extra entries found for key '{key}'.")
 
 
 def get_default_value(schema, key, count=None):
