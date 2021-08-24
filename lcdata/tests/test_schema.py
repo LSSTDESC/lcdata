@@ -62,6 +62,12 @@ def test_get_default_value_function(schema):
     assert val1 == 1 and val2 == 2
 
 
+def test_get_default_value_bad_schema(schema):
+    del schema['b']['default']
+    with pytest.raises(ValueError):
+        lcdata.schema.get_default_value(schema, 'b')
+
+
 def test_get_default_value_function_multiple(schema):
     val = lcdata.schema.get_default_value(schema, 'c', count=5)
     assert len(val) == 5
