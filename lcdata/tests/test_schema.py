@@ -160,6 +160,14 @@ def test_format_table_masked_function(table, schema):
     assert all(format_table['c'] == [1, 0, 2])
 
 
+def test_format_table_first_missing(table, schema):
+    del table['a']
+    del schema['a']['required']
+    schema['a']['default'] = 1.
+    format_table = lcdata.schema.format_table(table, schema, verbose=True)
+    assert all(format_table['a'] == [1., 1., 1.])
+
+
 def test_verify_schema(schema):
     verify_schema(schema)
 
@@ -183,13 +191,19 @@ def test_verify_schema_missing_key_aliases(schema):
 
 
 def test_verify_schema_bad_aliases(schema):
-    schema['a']['aliases'] = ['a_a']
+    schema['a']['aliases'] = ['a', 'a_a']
     with pytest.raises(ValueError):
         verify_schema(schema)
 
 
 def test_verify_schema_key_type(schema):
     del schema['a']['required']
+    with pytest.raises(ValueError):
+        verify_schema(schema)
+
+
+def test_verify_schema_extra(schema):
+    schema['a']['extra'] = 'bad'
     with pytest.raises(ValueError):
         verify_schema(schema)
 
