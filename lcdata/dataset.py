@@ -90,7 +90,7 @@ class LightCurveMetadata(abc.MutableMapping):
         return result
 
 
-def parse_observations_table(observations):
+def _parse_observations_table(observations):
     """Parse a table of observations and retrieve the individual light curves.
 
     Parameters
@@ -398,7 +398,7 @@ class HDF5LightCurves(abc.Sequence):
                 f"(object_id <= b'{end_object_id}')"
             ))
 
-        lc_object_ids, unordered_light_curves = parse_observations_table(observations)
+        lc_object_ids, unordered_light_curves = _parse_observations_table(observations)
 
         # Match the light curves to the metadata and preprocess them.
         lc_map = {k: i for i, k in enumerate(lc_object_ids)}
@@ -431,7 +431,7 @@ class HDF5LightCurves(abc.Sequence):
 
 
 class HDF5Dataset(Dataset):
-    """A dataset corresponding to an HDF5 file on disk.
+    """Dataset corresponding to an HDF5 file on disk.
 
     This class only loads the metadata by default. Accessing a light curve in the
     dataset will read it from disk.
@@ -486,6 +486,18 @@ class HDF5Dataset(Dataset):
         return self[chunk_size * chunk_idx:chunk_size * (chunk_idx + 1)].load()
 
     def iterate_chunks(self, chunk_size):
+        """Iterate through the dataset in chunks
+
+        Parameters
+        ----------
+        chunk_size : int
+            Number of light curves per chunk
+
+        Yields
+        -------
+        `Dataset`
+            `Dataset` object for each chunk with the light curves loaded.
+        """
         for chunk_idx in range(self.count_chunks(chunk_size)):
             yield self.get_chunk(chunk_idx, chunk_size)
 
@@ -532,7 +544,7 @@ def from_observations(meta, observations):
     `Dataset`
         A Dataset of light curves built from these tables.
     """
-    lc_object_ids, light_curves = parse_observations_table(observations)
+    lc_object_ids, light_curves = _parse_observations_table(observations)
 
     # Match the metadata to the light curves.
     meta_map = {k: i for i, k in enumerate(meta['object_id'])}

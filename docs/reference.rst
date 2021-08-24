@@ -12,6 +12,9 @@ Datasets
    :toctree: api
 
    Dataset
+   LightCurveMetadata
+   HDF5Dataset
+   HDF5LightCurves
 
 *Loading a dataset*
 
