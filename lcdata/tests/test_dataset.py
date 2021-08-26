@@ -164,6 +164,23 @@ def test_dataset_get_sncosmo_lc(dataset):
     assert 'zpsys' in lc.colnames
 
 
+def test_from_light_curves_duplicate_object_ids():
+    lcs = [make_light_curve('same_object_id') for i in range(2)]
+    with pytest.raises(ValueError):
+        lcdata.from_light_curves(lcs)
+
+
+def test_from_light_curves_no_meta():
+    lcs = []
+    for idx in range(5):
+        lc = make_light_curve(f'test_{idx}')
+        lc.meta = {}
+        lcs.append(lc)
+
+    dataset = lcdata.from_light_curves(lcs)
+    assert len(dataset.meta) == 5
+
+
 def test_dataset_addition(dataset, dataset_2):
     merge_dataset = dataset + dataset_2
 
