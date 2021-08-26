@@ -305,17 +305,13 @@ class Dataset:
                 if np.array_equal(col[~common_mask], dup_col[~common_mask],
                                   equal_nan=check_nan):
                     # Columns agree in the parts where they are both valid, merge them.
-                    print("hi2")
                     if not col_masked:
-                        print("hi3")
                         # col is already full, nothing to do.
                         pass
                     elif not dup_masked:
-                        print("hi")
                         # dup_col is full, use it directly.
                         new_meta[colname] = dup_col
                     else:
-                        print("hi4")
                         # merge two masked arrays.
                         col[~dup_col.mask] = dup_col[~dup_col.mask]
 
