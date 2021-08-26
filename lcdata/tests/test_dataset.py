@@ -89,6 +89,21 @@ def test_dataset_lc_meta_delete(dataset):
     assert 'myvar' not in dataset.light_curves[0].meta
 
 
+def test_dataset_get_lc_index(dataset):
+    lc = dataset.get_lc(3)
+    assert lc.meta['object_id'] == 'test_3'
+
+
+def test_dataset_get_lc_object_id(dataset):
+    lc = dataset.get_lc('test_2')
+    assert lc.meta['object_id'] == 'test_2'
+
+
+def test_dataset_get_lc_kwargs(dataset):
+    lc = dataset.get_lc(object_id='test_4')
+    assert lc.meta['object_id'] == 'test_4'
+
+
 def test_dataset_get_sncosmo_lc(dataset):
     lc = dataset.get_sncosmo_lc(3)
 

@@ -2,6 +2,7 @@ import astropy
 import astropy.table
 import numpy as np
 import os
+import sys
 from collections import abc
 
 from . import schema
@@ -157,12 +158,13 @@ class Dataset:
             for i in range(len(light_curves)):
                 self.light_curves[i] = light_curves[i]
 
-            # Sort the light curves
-            self.light_curves = self.light_curves[order]
+            self._update_lc_meta()
 
-            # Set up the meta data for each light curve to point to our table.
-            for lc, meta_row in zip(self.light_curves, self.meta):
-                lc.meta = LightCurveMetadata(meta_row)
+    def _update_lc_meta(self):
+        """Set up the meta data for each light curve to point to our metadata table.
+        """
+        for lc, meta_row in zip(self.light_curves, self.meta):
+            lc.meta = LightCurveMetadata(meta_row)
 
     def __add__(self, other):
         """Combine two datasets.
@@ -201,7 +203,7 @@ class Dataset:
         Dataset
             subset of the Dataset.
         """
-        if isinstance(key, int):
+        if np.issubdtype(type(key), np.integer):
             key = slice(key, key+1)
 
         meta = self.meta[key]
@@ -209,7 +211,25 @@ class Dataset:
 
         return Dataset(meta, light_curves)
 
-    def get_sncosmo_lc(self, idx):
+    def get_lc(self, key=None, **kwargs):
+        if np.issubdtype(type(key), np.integer):
+            return self.light_curves[key]
+        elif key is not None:
+            mask = self.meta['object_id'] == key
+        else:
+            mask = np.ones_like(self.meta, dtype=bool)
+
+        for kwargs_key, kwargs_value in kwargs.items():
+            mask &= self.meta[kwargs_key] == kwargs_value
+
+        loc = np.argwhere(mask)[0]
+        if len(loc) > 1:
+            raise KeyError("Multiple light curves match query.")
+        elif len(loc) == 0:
+            raise KeyError("No light curve matches query.")
+        return self.light_curves[loc[0]]
+
+    def get_sncosmo_lc(self, key, **kwargs):
         """Get a light curve in sncosmo format.
 
         Parameters
@@ -222,9 +242,89 @@ class Dataset:
         `~astropy.table.Table`
             Light curve in sncosmo format.
         """
-        lc = self.light_curves[idx]
+        lc = self.get_lc(key, **kwargs)
         lc = to_sncosmo(lc)
         return lc
+
+    def add_meta(self, meta, suffix='_2', warn_on_disagreement=True):
+        """Add additional metadata into the dataset.
+
+        The other metadata table will be merged using a left join on the `object_id`
+        key. It is fine if the other metadata table is in a different order, missing
+        light curves, or has additional light curves that aren't in the dataset. For any
+        missing entries, the resulting metadata table will be masked.
+
+        Parameters
+        ----------
+        meta : `~astropy.table.Table`
+            Metadata table to merge.
+        suffix : str
+            Suffix to add to the second column name if there are disagreeing columns.
+        warn_on_disagreement : bool
+            If True, print a warning if two columns disagree.
+        """
+        dup_flag = '__lcdata_dup__'
+
+        new_meta = astropy.table.join(
+            self.meta,
+            meta,
+            keys='object_id',
+            join_type='left',
+            uniq_col_name='{col_name}{table_name}',
+            table_names=['', dup_flag],
+        )
+
+        # Handle duplicate columns.
+        for dup_colname in new_meta.colnames:
+            if dup_colname[-len(dup_flag):] != dup_flag:
+                continue
+
+            # Found a duplicate
+            colname = dup_colname[:-len(dup_flag)]
+            col = new_meta[colname]
+            dup_col = new_meta[dup_colname]
+
+            if all(col == dup_col):
+                # Same data, drop the duplicate.
+                del new_meta[dup_colname]
+                continue
+
+            # Check if these are masked columns and if they agree in the common
+            # non-masked parts.
+            col_masked = isinstance(col, astropy.table.MaskedColumn)
+            dup_masked = isinstance(dup_col, astropy.table.MaskedColumn)
+            if col_masked or dup_masked:
+                common_mask = True
+                if col_masked:
+                    common_mask &= col.mask
+                if dup_masked:
+                    common_mask &= dup_col.mask
+
+                if all(col[~common_mask] == dup_col[~common_mask]):
+                    # Columns agree in the parts where they are both valid, merge them.
+                    if not col_masked:
+                        # col is already full, nothing to do.
+                        pass
+                    elif not dup_masked:
+                        # dup_col is full, use it directly.
+                        new_meta[colname] = dup_col
+                    else:
+                        # merge two masked arrays.
+                        col[~dup_col.mask] = dup_col[~dup_col.mask]
+
+                    del new_meta[dup_colname]
+                    continue
+
+            # Disagreement between the two columns.
+            if warn_on_disagreement:
+                print(f"WARNING: column {colname} has disagreeing values, renaming "
+                      f"second one to {colname}{suffix}.", file=sys.stderr)
+
+            new_meta.rename_column(dup_colname, colname + suffix)
+
+        self.meta = new_meta
+
+        self._update_lc_meta()
 
     def write_hdf5(self, path, append=False, overwrite=False, object_id_itemsize=0,
                    band_itemsize=0):
@@ -356,14 +456,11 @@ class HDF5LightCurves(abc.Sequence):
 
     Parameters
     ----------
-    path : str
-        Path to the HDF5 file on disk.
-    meta : `~astropy.table.Table`
-        Metadata table for the dataset.
+    dataset : `HDF5Dataset`
+        Dataset to handle the light curves for.
     """
-    def __init__(self, path, meta):
-        self.path = path
-        self.meta = meta
+    def __init__(self, dataset):
+        self._dataset = dataset
 
     def load(self, start_idx=None, end_idx=None):
         """Load a series of light curves into memory
@@ -387,11 +484,11 @@ class HDF5LightCurves(abc.Sequence):
         if end_idx is None or end_idx > len(self):
             end_idx = len(self)
 
-        start_object_id = self.meta[start_idx]['object_id']
-        end_object_id = self.meta[end_idx - 1]['object_id']
+        start_object_id = self._dataset.meta[start_idx]['object_id']
+        end_object_id = self._dataset.meta[end_idx - 1]['object_id']
 
         # Read the light curves.
-        with tables.open_file(self.path, 'r') as f:
+        with tables.open_file(self._dataset.path, 'r') as f:
             obs_node = f.get_node('/observations')
             observations = astropy.table.Table(obs_node.read_where(
                 f"(object_id >= b'{start_object_id}') & "
@@ -404,7 +501,7 @@ class HDF5LightCurves(abc.Sequence):
         lc_map = {k: i for i, k in enumerate(lc_object_ids)}
         light_curves = []
         for idx in range(start_idx, end_idx):
-            meta_row = self.meta[idx]
+            meta_row = self._dataset.meta[idx]
             lc = unordered_light_curves[lc_map[meta_row['object_id']]]
             lc = schema.format_table(lc, schema.light_curve_schema)
             lc.meta = LightCurveMetadata(meta_row)
@@ -421,13 +518,13 @@ class HDF5LightCurves(abc.Sequence):
             if key.step is not None:
                 lcs = lcs[::key.step]
             return lcs
-        elif isinstance(key, int):
+        elif np.issubdtype(type(key), np.integer):
             return self.load(key, key+1)[0]
         else:
             raise TypeError('indices must be integers or slices.')
 
     def __len__(self):
-        return len(self.meta)
+        return len(self._dataset.meta)
 
 
 class HDF5Dataset(Dataset):
@@ -450,10 +547,10 @@ class HDF5Dataset(Dataset):
         self.path = path
         super().__init__(meta)
 
-        self.light_curves = HDF5LightCurves(self.path, self.meta)
+        self.light_curves = HDF5LightCurves(self)
 
     def __getitem__(self, key):
-        if isinstance(key, int):
+        if np.issubdtype(type(key), np.integer):
             key = slice(key, key+1)
 
         meta = self.meta[key]
@@ -463,6 +560,10 @@ class HDF5Dataset(Dataset):
     def load(self):
         """Load the current dataset into memory."""
         return Dataset(self.meta, self.light_curves.load())
+
+    def _update_lc_meta(self):
+        """Light curves aren't loaded in memory, so don't need to update them."""
+        pass
 
     def count_chunks(self, chunk_size):
         """Count the number of chunks that are in the dataset for a given chunk_size"""
