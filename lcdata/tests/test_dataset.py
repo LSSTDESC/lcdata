@@ -28,6 +28,11 @@ def make_dataset(start_idx=0, end_idx=10):
     lcs = [make_light_curve(f'test_{i}') for i in range(start_idx, end_idx)]
     dataset = lcdata.from_light_curves(lcs)
 
+    dataset.meta['maskedvar'] = np.ma.masked_array(
+        np.arange(start_idx, end_idx),
+        mask=np.arange(start_idx, end_idx) % 2 == 0
+    )
+
     return dataset
 
 
@@ -108,6 +113,33 @@ def test_dataset_add_meta_conflict(dataset):
     new_meta['myvar'] = 2.
     dataset.add_meta(new_meta)
     assert 'myvar_2' in dataset.meta.colnames
+
+
+def test_dataset_add_meta_masked(dataset):
+    num_cols = len(dataset.meta.columns)
+    new_meta = dataset.meta[['object_id', 'maskedvar']]
+    new_meta['maskedvar'].mask = True
+    new_meta['maskedvar'].mask[0] = False
+    dataset.add_meta(new_meta)
+    assert len(dataset.meta.columns) == num_cols
+
+
+def test_dataset_add_meta_original_masked(dataset):
+    num_cols = len(dataset.meta.columns)
+    new_meta = dataset.meta[['object_id', 'maskedvar']]
+    dataset.meta['maskedvar'] = np.arange(10)
+    dataset.add_meta(new_meta)
+    assert len(dataset.meta.columns) == num_cols
+    assert all(dataset.meta['maskedvar'] == np.arange(10))
+
+
+def test_dataset_add_meta_new_masked(dataset):
+    num_cols = len(dataset.meta.columns)
+    new_meta = dataset.meta[['object_id', 'maskedvar']]
+    new_meta['maskedvar'] = np.arange(10)
+    dataset.add_meta(new_meta)
+    assert len(dataset.meta.columns) == num_cols
+    assert all(dataset.meta['maskedvar'] == np.arange(10))
 
 
 def test_dataset_get_lc_index(dataset):

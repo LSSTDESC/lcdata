@@ -284,17 +284,18 @@ class Dataset:
             col = new_meta[colname]
             dup_col = new_meta[dup_colname]
 
-            check_nan = np.issubdtype(col.dtype, np.floating)
-            if np.array_equal(col, dup_col, equal_nan=check_nan):
-                # Same data, drop the duplicate.
-                del new_meta[dup_colname]
-                continue
-
-            # Check if these are masked columns and if they agree in the common
-            # non-masked parts.
             col_masked = isinstance(col, astropy.table.MaskedColumn)
             dup_masked = isinstance(dup_col, astropy.table.MaskedColumn)
-            if col_masked or dup_masked:
+            check_nan = np.issubdtype(col.dtype, np.floating)
+            if not col_masked and not dup_masked:
+                # Standard columns. Compare them directly.
+                if np.array_equal(col, dup_col, equal_nan=check_nan):
+                    # Same data, drop the duplicate.
+                    del new_meta[dup_colname]
+                    continue
+            else:
+                # At least one masked column. Check if they agree in the non-masked
+                # parts.
                 common_mask = True
                 if col_masked:
                     common_mask &= col.mask
@@ -304,13 +305,17 @@ class Dataset:
                 if np.array_equal(col[~common_mask], dup_col[~common_mask],
                                   equal_nan=check_nan):
                     # Columns agree in the parts where they are both valid, merge them.
+                    print("hi2")
                     if not col_masked:
+                        print("hi3")
                         # col is already full, nothing to do.
                         pass
                     elif not dup_masked:
+                        print("hi")
                         # dup_col is full, use it directly.
                         new_meta[colname] = dup_col
                     else:
+                        print("hi4")
                         # merge two masked arrays.
                         col[~dup_col.mask] = dup_col[~dup_col.mask]
 
