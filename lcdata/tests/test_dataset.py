@@ -89,6 +89,27 @@ def test_dataset_lc_meta_delete(dataset):
     assert 'myvar' not in dataset.light_curves[0].meta
 
 
+def test_dataset_add_meta(dataset):
+    new_meta = dataset.meta[['object_id']]
+    new_meta['test'] = 2.
+    dataset.add_meta(new_meta)
+    assert 'test' in dataset.meta.colnames
+
+
+def test_dataset_add_meta_duplicate(dataset):
+    num_cols = len(dataset.meta.columns)
+    new_meta = dataset.meta[['object_id', 'myvar']]
+    dataset.add_meta(new_meta)
+    assert len(dataset.meta.columns) == num_cols
+
+
+def test_dataset_add_meta_conflict(dataset):
+    new_meta = dataset.meta[['object_id', 'myvar']]
+    new_meta['myvar'] = 2.
+    dataset.add_meta(new_meta)
+    assert 'myvar_2' in dataset.meta.colnames
+
+
 def test_dataset_get_lc_index(dataset):
     lc = dataset.get_lc(3)
     assert lc.meta['object_id'] == 'test_3'

@@ -284,7 +284,8 @@ class Dataset:
             col = new_meta[colname]
             dup_col = new_meta[dup_colname]
 
-            if all(col == dup_col):
+            check_nan = np.issubdtype(col.dtype, np.floating)
+            if np.array_equal(col, dup_col, equal_nan=check_nan):
                 # Same data, drop the duplicate.
                 del new_meta[dup_colname]
                 continue
@@ -300,7 +301,8 @@ class Dataset:
                 if dup_masked:
                     common_mask &= dup_col.mask
 
-                if all(col[~common_mask] == dup_col[~common_mask]):
+                if np.array_equal(col[~common_mask], dup_col[~common_mask],
+                                  equal_nan=check_nan):
                     # Columns agree in the parts where they are both valid, merge them.
                     if not col_masked:
                         # col is already full, nothing to do.
