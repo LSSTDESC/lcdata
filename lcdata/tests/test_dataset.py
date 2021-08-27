@@ -19,6 +19,7 @@ def make_light_curve(object_id='test'):
         'ra': 10.,
         'dec': 5.,
         'myvar': 1.,
+        'strvar': 'test',
     }
 
     return lc
@@ -113,6 +114,16 @@ def test_dataset_add_meta_conflict(dataset):
     new_meta['myvar'] = 2.
     dataset.add_meta(new_meta)
     assert 'myvar_2' in dataset.meta.colnames
+
+
+def test_dataset_add_meta_bytes(dataset):
+    # Sometimes we have bytes vs string columns with the same data. These should be
+    # considered to be the same column if each individual string matches.
+    num_cols = len(dataset.meta.columns)
+    new_meta = dataset.meta[['object_id', 'strvar']]
+    new_meta['strvar'] = new_meta['strvar'].astype(bytes)
+    dataset.add_meta(new_meta)
+    assert len(dataset.meta.columns) == num_cols
 
 
 def test_dataset_add_meta_masked(dataset):

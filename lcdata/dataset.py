@@ -289,21 +289,28 @@ class Dataset:
             check_nan = np.issubdtype(col.dtype, np.floating)
             if not col_masked and not dup_masked:
                 # Standard columns. Compare them directly.
-                if np.array_equal(col, dup_col, equal_nan=check_nan):
+                comparison = col == dup_col
+                if check_nan:
+                    comparison |= (np.isnan(col) & np.isnan(dup_col))
+                if np.all(comparison):
                     # Same data, drop the duplicate.
                     del new_meta[dup_colname]
                     continue
             else:
                 # At least one masked column. Check if they agree in the non-masked
                 # parts.
-                common_mask = True
+                common_mask = False
                 if col_masked:
-                    common_mask &= col.mask
+                    common_mask |= col.mask
                 if dup_masked:
-                    common_mask &= dup_col.mask
+                    common_mask |= dup_col.mask
 
-                if np.array_equal(col[~common_mask], dup_col[~common_mask],
-                                  equal_nan=check_nan):
+                col_common = col[~common_mask]
+                dup_col_common = dup_col[~common_mask]
+                comparison = col_common == dup_col_common
+                if check_nan:
+                    comparison |= (np.isnan(col_common) & np.isnan(dup_col_common))
+                if len(comparison) == 0 or np.all(comparison):
                     # Columns agree in the parts where they are both valid, merge them.
                     if not col_masked:
                         # col is already full, nothing to do.
