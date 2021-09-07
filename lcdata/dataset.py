@@ -679,7 +679,12 @@ def from_light_curves(light_curves):
         Dataset containing all of these light curves.
     """
     try:
-        meta = astropy.table.Table([i.meta for i in light_curves])
+        # Pull out the metadata. astropy checks that the rows are all dicts, so make
+        # sure that they actually are. This is a problem otherwise for our
+        # LightCurveMetadata objects.
+        dict_meta = [dict(i.meta) for i in light_curves]
+
+        meta = astropy.table.Table(dict_meta)
     except TypeError:
         # Metadata is empty for everything. Create an empty table.
         meta = astropy.table.Table({
