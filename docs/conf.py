@@ -6,12 +6,7 @@
 
 # -- Path setup --------------------------------------------------------------
 
-import os
-import sys
-
-# Generate api directory if it doesn't already exist
-if not os.path.exists('api'):
-    os.mkdir('api')
+import importlib.metadata
 
 # -- Project information -----------------------------------------------------
 
@@ -20,7 +15,7 @@ copyright = '2021, Kyle Boone'
 author = 'Kyle Boone'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1'
+release = importlib.metadata.version('lcdata')
 
 
 # -- General configuration ---------------------------------------------------
