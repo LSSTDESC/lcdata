@@ -1,2 +1,2 @@
 from .dataset import *
-from . import schema, utils
+from . import lightcurve, schema, utils

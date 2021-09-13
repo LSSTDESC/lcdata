@@ -42,6 +42,17 @@ def table():
     })
 
 
+@pytest.fixture
+def dictionary():
+    return {
+        'a': np.float64(1.),
+        'b': b'abc',
+        'c': np.int32(10),
+    }
+
+
+# Test default values
+
 def test_get_default_value(schema):
     val = lcdata.schema.get_default_value(schema, 'b')
     assert val == 'test'
@@ -74,6 +85,8 @@ def test_get_default_value_function_multiple(schema):
     assert len(val) == 5
 
 
+# Test aliases
+
 def test_find_alias(schema):
     names = ['aa', 'bb', 'cc']
     assert lcdata.schema.find_alias(names, schema['a']['aliases']) == 'aa'
@@ -99,7 +112,49 @@ def test_find_alias_fail(schema):
     assert lcdata.schema.find_alias(names, schema['b']['aliases']) is None
 
 
+# Test dictionary formatting
+
+def test_format_dict(dictionary, schema):
+    # Shouldn't do anything if the schema matches.
+    format_dict = lcdata.schema.format_dict(dictionary, schema, verbose=True)
+    assert dictionary is format_dict
+
+
+def test_format_dict_alias(dictionary, schema):
+    input_dict = dictionary.copy()
+    input_dict['bb'] = input_dict.pop('b')
+    format_dict = lcdata.schema.format_dict(dictionary, schema, verbose=True)
+    assert dictionary == format_dict
+
+
+def test_format_dict_required(dictionary, schema):
+    del dictionary['a']
+    with pytest.raises(ValueError):
+        lcdata.schema.format_dict(dictionary, schema, verbose=True)
+
+
+def test_format_dict_default(dictionary, schema):
+    del dictionary['b']
+    format_dict = lcdata.schema.format_dict(dictionary, schema, verbose=True)
+    assert format_dict['b'] == 'test'
+
+
+def test_format_dict_default_function(dictionary, schema):
+    del dictionary['c']
+    format_dict = lcdata.schema.format_dict(dictionary, schema, verbose=True)
+    assert format_dict['c'] == 1
+
+
+def test_format_dict_dtype(dictionary, schema):
+    dictionary['a'] = int(dictionary['a'])
+    format_dict = lcdata.schema.format_dict(dictionary, schema, verbose=True)
+    assert isinstance(format_dict['a'], np.float64)
+
+
+# Test table formatting
+
 def test_format_table(table, schema):
+    # Shouldn't do anything if the schema matches.
     format_table = lcdata.schema.format_table(table, schema, verbose=True)
     assert table is format_table
 
@@ -168,6 +223,8 @@ def test_format_table_first_missing(table, schema):
     assert all(format_table['a'] == [1., 1., 1.])
 
 
+# Test schema verification
+
 def test_verify_schema(schema):
     verify_schema(schema)
 
@@ -206,11 +263,3 @@ def test_verify_schema_extra(schema):
     schema['a']['extra'] = 'bad'
     with pytest.raises(ValueError):
         verify_schema(schema)
-
-
-def test_light_curve_schema():
-    lcdata.schema.verify_schema(lcdata.schema.light_curve_schema)
-
-
-def test_metadata_schema():
-    lcdata.schema.verify_schema(lcdata.schema.metadata_schema)

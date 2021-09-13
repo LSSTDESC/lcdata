@@ -6,11 +6,11 @@ import sys
 from collections import abc
 
 from . import schema
+from .lightcurve import light_curve_meta_schema, to_sncosmo, parse_light_curve
 from .utils import warn_first_time, get_str_dtype_length, verify_unique
 
 __all__ = ["Dataset", "LightCurveMetadata", "HDF5LightCurves", "HDF5Dataset",
-           "read_hdf5", "from_observations", "from_light_curves", "from_avocado",
-           "to_sncosmo"]
+           "read_hdf5", "from_observations", "from_light_curves", "from_avocado"]
 
 
 class LightCurveMetadata(abc.MutableMapping):
@@ -38,9 +38,9 @@ class LightCurveMetadata(abc.MutableMapping):
         self.meta_row[key] = value
 
     def __delitem__(self, key):
-        if key in schema.metadata_schema:
+        if key in light_curve_meta_schema:
             # Key is in the schema, set it to the default value.
-            self.meta_row[key] = schema.get_default_value(schema.metadata_schema, key)
+            self.meta_row[key] = schema.get_default_value(light_curve_meta_schema, key)
         else:
             # Mask out the entry to make it disappear. First, convert the column to a
             # masked one if it isn't already.
@@ -127,7 +127,7 @@ class Dataset:
     """
     def __init__(self, meta, light_curves=None):
         # Parse the metadata to get it in a standardized format.
-        unordered_meta = schema.format_table(meta, schema.metadata_schema)
+        unordered_meta = schema.format_table(meta, light_curve_meta_schema)
 
         # Reorder the metadata
         order = np.argsort(unordered_meta['object_id'])
@@ -148,7 +148,7 @@ class Dataset:
                                  f"and light curves (length {len(light_curves)}).")
 
             # Parse all of the light curves to get them in a standardized format.
-            light_curves = [schema.format_table(i, schema.light_curve_schema) for i in
+            light_curves = [parse_light_curve(lc, parse_meta=False) for lc in
                             light_curves]
 
             # Load the light curves into a numpy array. Doing this directly with
@@ -513,7 +513,7 @@ class HDF5LightCurves(abc.Sequence):
         for idx in range(start_idx, end_idx):
             meta_row = self._dataset.meta[idx]
             lc = unordered_light_curves[lc_map[meta_row['object_id']]]
-            lc = schema.format_table(lc, schema.light_curve_schema)
+            lc = parse_light_curve(lc, parse_meta=False)
             lc.meta = LightCurveMetadata(meta_row)
             light_curves.append(lc)
 
@@ -720,31 +720,3 @@ def from_avocado(name, **kwargs):
     meta = astropy.table.Table.from_pandas(dataset.metadata, index=True)
 
     return Dataset(meta, light_curves)
-
-
-def to_sncosmo(light_curve):
-    """Convert a light curve to sncosmo format.
-
-    This adds the zp and zpsys keys that are required by sncosmo, and converts the band
-    name to a string instead of the bytes type used internally.
-
-    Parameters
-    ----------
-    light_curve : `~astropy.table.Table`
-        Light curve in lcdata format.
-
-    Returns
-    -------
-    `~astropy.table.Table`
-        Light curve in sncosmo format.
-    """
-    light_curve = light_curve.copy()
-
-    # Convert the band names from bytes to strings
-    light_curve['band'] = light_curve['band'].astype(str)
-
-    # Add in zeropoint information.
-    light_curve['zp'] = 25.
-    light_curve['zpsys'] = 'ab'
-
-    return light_curve
