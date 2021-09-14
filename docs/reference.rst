@@ -32,7 +32,9 @@ Datasets
 .. autosummary::
    :toctree: api
 
+   parse_light_curve
    to_sncosmo
+   lightcurve.generate_object_id
 
 
 Schemas
@@ -55,4 +57,3 @@ Utilities
 
    utils.download_file
    utils.download_zenodo
-   utils.generate_object_id
