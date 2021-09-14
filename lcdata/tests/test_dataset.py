@@ -153,6 +153,14 @@ def test_dataset_add_meta_new_masked(dataset):
     assert all(dataset.meta['maskedvar'] == np.arange(10))
 
 
+def test_dataset_process_light_curve(dataset):
+    # Make sure that if we reprocess a light curve from a dataset nothing happens.
+    lc = dataset.light_curves[0]
+    parsed_lc = lcdata.parse_light_curve(lc)
+    assert lc is parsed_lc
+    assert lc.meta is parsed_lc.meta
+
+
 def test_dataset_get_lc_index(dataset):
     lc = dataset.get_lc(3)
     assert lc.meta['object_id'] == 'test_3'
