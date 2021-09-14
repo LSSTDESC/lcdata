@@ -141,30 +141,3 @@ def verify_unique(list_1, list_2, ignore_failure=False):
             )
     else:
         return True
-
-
-_session_id = None
-_object_id_count = 0
-
-
-def generate_object_id():
-    """Generate a unique object ID for a light curve.
-
-    We want to make this unique but readable. It is also important that if different
-    datasets are generated with different runs of they program they have different IDs.
-    To accomplish this, we use the format lcdata_[random session string]_[count]. The
-    random_session_string will be consistent for all of the light curves generated in
-    the same session. The count will start from zero and increase.
-    """
-    global _session_id
-    global _object_id_count
-
-    if _session_id is None:
-        import random
-        import string
-        _session_id = ''.join(random.choice(string.ascii_lowercase) for i in range(6))
-
-    object_id = f'lcdata_{_session_id}_{_object_id_count:07d}'
-    _object_id_count += 1
-
-    return object_id

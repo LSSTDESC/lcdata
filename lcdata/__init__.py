@@ -1,2 +1,3 @@
 from .dataset import *
-from . import schema, utils
+from .lightcurve import *
+from . import dataset, lightcurve, schema, utils

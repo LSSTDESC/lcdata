@@ -1,8 +1,5 @@
-import astropy
 import astropy.table
 import numpy as np
-
-from .utils import generate_object_id
 
 """This module describes and verifies schemas for astropy Tables.
 
@@ -18,62 +15,6 @@ Each key in the schema much have the following attributes specified:
     - default_function: A function to call to get the default value. The function can
         return different things every time that it is called.
 """
-
-light_curve_schema = {
-    'time': {
-        'dtype': np.float64,
-        'required': True,
-        'aliases': ('time', 'date', 'jd', 'mjd', 'mjdobs'),
-    },
-    'flux': {
-        'dtype': np.float32,
-        'required': True,
-        'aliases': ('flux', 'f', 'fluxcal'),
-    },
-    'fluxerr': {
-        'dtype': np.float32,
-        'required': True,
-        'aliases': ('fluxerr', 'fluxerror', 'fe', 'fluxcalerr', 'fluxcalerror'),
-    },
-    'band': {
-        'dtype': bytes,
-        'required': True,
-        'aliases': ('band', 'bandpass', 'passband', 'filter', 'flt'),
-    },
-}
-
-metadata_schema = {
-    'object_id': {
-        'dtype': str,
-        'default_function': generate_object_id,
-        'aliases': ('objectid', 'id'),
-    },
-    'ra': {
-        'dtype': float,
-        'default': np.nan,
-        'aliases': ('ra', 'rightascension', 'hostra', 'hostrightascension', 'hostgalra',
-                    'hostgalrightascension')
-    },
-    'dec': {
-        'dtype': float,
-        'default': np.nan,
-        'aliases': ('dec', 'decl', 'declination', 'hostdec', 'hostdecl',
-                    'hostdeclination', 'hostgaldec', 'hostgaldecl',
-                    'hostgaldeclination')
-    },
-    'type': {
-        'dtype': str,
-        'default': 'Unknown',
-        'aliases': ('type', 'label', 'class', 'classification', 'truetarget',
-                    'target'),
-    },
-    'redshift': {
-        'dtype': float,
-        'default': np.nan,
-        'aliases': ('redshift', 'z', 'truez', 'hostz', 'hostspecz', 'hostgalz',
-                    'hostgalspecz')
-    },
-}
 
 
 def verify_schema(schema):
@@ -186,6 +127,90 @@ def find_alias(names, aliases):
             return name_map[alias]
 
     return None
+
+
+def format_dict(dictionary, schema, verbose=False):
+    """Format a dictionary with a given schema.
+
+    Parameters
+    ----------
+    dictionary : `dict`
+        Dictionary to format
+    schema : dict[dict]
+        Schema to use for formatting. See schema.py for details.
+    verbose : bool, optional
+        Whether to print debugging messages, by default False
+
+    Returns
+    -------
+    `dict`
+        Formatted dictionary
+
+    Raises
+    ------
+    ValueError
+        If there are required keys in the schema that are missing in the dictionary.
+    """
+    # First, check if the dictionary is in the right format already.
+    if len(dictionary.keys()) >= len(schema):
+        for (dict_key, dict_value), (schema_key, schema_info) in zip(
+                dictionary.items(), schema.items()):
+            if dict_key != schema_key:
+                # Mismatch on column name
+                break
+            if not isinstance(dict_value, schema_info['dtype']):
+                # Mismatch on dtype
+                break
+        else:
+            # Current table follows the schema, return it as is.
+            if verbose:
+                print("Dictionary is compliant, returning it as is.")
+            return dictionary
+
+    # Current dictionary doesn't follow the schema. Reformat it to get it in our
+    # standard format. Make a copy, and we'll pop each entry out one-by-one as we
+    # convert them.
+    dictionary = dictionary.copy()
+
+    if verbose:
+        print("Formatting dictionary...")
+
+    new_dict = dict()
+
+    for schema_key, schema_info in schema.items():
+        old_key = find_alias(dictionary.keys(), schema_info['aliases'])
+
+        if old_key is None:
+            # Key not available. Use a default value if possible.
+            try:
+                default_value = get_default_value(schema, schema_key)
+            except ValueError:
+                raise ValueError(f"Couldn't find required key '{schema_key}'. "
+                                 f"Possible aliases {schema_info['aliases']}.")
+
+            if verbose:
+                print(f"- {schema_key}: using default value '{default_value}'")
+            new_dict[schema_key] = default_value
+        else:
+            # Alias is available.
+            if verbose:
+                print(f"- {schema_key}: using column '{old_key}'")
+
+            value = dictionary.pop(old_key)
+
+            # Cast to the right dtype if necessary.
+            if not isinstance(value, schema_info['dtype']):
+                if verbose:
+                    print(f"    Converting from dtype '{type(value)}' to dtype "
+                          f"'{schema_info['dtype']}'.")
+                value = schema_info['dtype'](value)
+
+            new_dict[schema_key] = value
+
+    # Add in remaining keys
+    new_dict.update(dictionary)
+
+    return new_dict
 
 
 def format_table(table, schema, verbose=False):
