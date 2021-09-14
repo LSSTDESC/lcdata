@@ -1,9 +1,12 @@
+from collections import abc
+import astropy.table
 import numpy as np
 
 from . import schema
 
 
-__all__ = ["parse_light_curve", "to_sncosmo"]
+__all__ = ["parse_light_curve", "to_sncosmo", "generate_object_id",
+           "LightCurveMetadata"]
 
 
 _session_id = None
@@ -111,6 +114,13 @@ def parse_light_curve(light_curve, parse_meta=True, verbose=False):
     `~astropy.table.Table`
         Light curve in lcdata format
     """
+    if isinstance(light_curve.meta, LightCurveMetadata):
+        # The light curve came from an lcdata dataset. No need to do anything because it
+        # was already parsed and is guaranteed to be in the correct format.
+        if verbose:
+            print("Light curve came from an lcdata dataset, already parsed.")
+        return light_curve
+
     # Format the observations table
     light_curve = schema.format_table(light_curve, light_curve_schema, verbose=verbose)
 
@@ -148,3 +158,82 @@ def to_sncosmo(light_curve):
     light_curve['zpsys'] = 'ab'
 
     return light_curve
+
+
+class LightCurveMetadata(abc.MutableMapping):
+    """Class to handle the metadata for a light curve in a dataset.
+
+    The dataset has a metadata table with rows for each light curve. This class is a
+    view into the metadata table that behaves like a dict. Modifying it will update the
+    underlying metadata table.
+
+    Parameters
+    ----------
+    meta_row : `~astropy.table.Row`
+        Row in the metadata table corresponding to a single light curve.
+    """
+    def __init__(self, meta_row):
+        self.meta_row = meta_row
+        self._cache_dict = None
+
+    def __getitem__(self, key):
+        value = self.meta_row[key]
+        if isinstance(value, np.ma.core.MaskedConstant):
+            raise KeyError
+        return value
+
+    def __setitem__(self, key, value):
+        self.meta_row[key] = value
+
+    def __delitem__(self, key):
+        if key in light_curve_meta_schema:
+            # Key is in the schema, set it to the default value.
+            self.meta_row[key] = schema.get_default_value(light_curve_meta_schema, key)
+        else:
+            # Mask out the entry to make it disappear. First, convert the column to a
+            # masked one if it isn't already.
+            table = self.meta_row.table
+            if not isinstance(table[key], astropy.table.MaskedColumn):
+                # Convert to a masked column
+                table[key] = astropy.table.MaskedColumn(table[key])
+
+            # Mask out the value
+            self.meta_row[key] = np.ma.masked
+
+    def __iter__(self):
+        # Return all of the keys for values that aren't masked.
+        for key, value in zip(self.meta_row.keys(), self.meta_row.values()):
+            if not isinstance(value, np.ma.core.MaskedConstant):
+                yield key
+
+    def __len__(self):
+        # Return the number of keys with values that aren't masked.
+        count = 0
+        for value in self.meta_row.values():
+            if not isinstance(value, np.ma.core.MaskedConstant):
+                count += 1
+        return count
+
+    def __str__(self):
+        return str(dict(self))
+
+    def __repr__(self):
+        return f"{type(self).__name__}({dict(self)})"
+
+    def __copy__(self):
+        return self.copy()
+
+    def __deepcopy__(self, memo):
+        import copy
+        return copy.deepcopy(dict(self), memo)
+
+    def copy(self, use_cache=False, update_cache=False):
+        if use_cache and self._cache_dict is not None and not update_cache:
+            return self._cache_dict.copy()
+
+        result = dict(self)
+
+        if use_cache or update_cache:
+            self._cache_dict = result.copy()
+
+        return result

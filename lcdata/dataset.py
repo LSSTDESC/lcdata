@@ -6,89 +6,12 @@ import sys
 from collections import abc
 
 from . import schema
-from .lightcurve import light_curve_meta_schema, to_sncosmo, parse_light_curve
+from .lightcurve import light_curve_meta_schema, to_sncosmo, parse_light_curve, \
+    LightCurveMetadata
 from .utils import warn_first_time, get_str_dtype_length, verify_unique
 
-__all__ = ["Dataset", "LightCurveMetadata", "HDF5LightCurves", "HDF5Dataset",
-           "read_hdf5", "from_observations", "from_light_curves", "from_avocado"]
-
-
-class LightCurveMetadata(abc.MutableMapping):
-    """Class to handle the metadata for a light curve.
-
-    This is a view into the metadata table that behaves like a dict. Modifying it will
-    update the underlying metadata table.
-
-    Parameters
-    ----------
-    meta_row : `~astropy.table.Row`
-        Row in the metadata table corresponding to a single light curve.
-    """
-    def __init__(self, meta_row):
-        self.meta_row = meta_row
-        self._cache_dict = None
-
-    def __getitem__(self, key):
-        value = self.meta_row[key]
-        if isinstance(value, np.ma.core.MaskedConstant):
-            raise KeyError
-        return value
-
-    def __setitem__(self, key, value):
-        self.meta_row[key] = value
-
-    def __delitem__(self, key):
-        if key in light_curve_meta_schema:
-            # Key is in the schema, set it to the default value.
-            self.meta_row[key] = schema.get_default_value(light_curve_meta_schema, key)
-        else:
-            # Mask out the entry to make it disappear. First, convert the column to a
-            # masked one if it isn't already.
-            table = self.meta_row.table
-            if not isinstance(table[key], astropy.table.MaskedColumn):
-                # Convert to a masked column
-                table[key] = astropy.table.MaskedColumn(table[key])
-
-            # Mask out the value
-            self.meta_row[key] = np.ma.masked
-
-    def __iter__(self):
-        # Return all of the keys for values that aren't masked.
-        for key, value in zip(self.meta_row.keys(), self.meta_row.values()):
-            if not isinstance(value, np.ma.core.MaskedConstant):
-                yield key
-
-    def __len__(self):
-        # Return the number of keys with values that aren't masked.
-        count = 0
-        for value in self.meta_row.values():
-            if not isinstance(value, np.ma.core.MaskedConstant):
-                count += 1
-        return count
-
-    def __str__(self):
-        return str(dict(self))
-
-    def __repr__(self):
-        return f"{type(self).__name__}({dict(self)})"
-
-    def __copy__(self):
-        return self.copy()
-
-    def __deepcopy__(self, memo):
-        import copy
-        return copy.deepcopy(dict(self), memo)
-
-    def copy(self, use_cache=False, update_cache=False):
-        if use_cache and self._cache_dict is not None and not update_cache:
-            return self._cache_dict.copy()
-
-        result = dict(self)
-
-        if use_cache or update_cache:
-            self._cache_dict = result.copy()
-
-        return result
+__all__ = ["Dataset", "HDF5LightCurves", "HDF5Dataset", "read_hdf5",
+           "from_observations", "from_light_curves", "from_avocado"]
 
 
 def _parse_observations_table(observations):

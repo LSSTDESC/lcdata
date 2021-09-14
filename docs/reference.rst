@@ -34,7 +34,7 @@ Datasets
 
    parse_light_curve
    to_sncosmo
-   lightcurve.generate_object_id
+   generate_object_id
 
 
 Schemas
