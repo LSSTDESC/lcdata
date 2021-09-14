@@ -41,3 +41,11 @@ def test_parse_light_curve(light_curve):
     parsed_light_curve = lcdata.parse_light_curve(light_curve)
     assert 'time' in parsed_light_curve.columns
     assert 'redshift' in parsed_light_curve.meta.keys()
+
+
+def test_to_sncosmo(light_curve):
+    parsed_light_curve = lcdata.parse_light_curve(light_curve)
+    sncosmo_light_curve = lcdata.to_sncosmo(parsed_light_curve)
+
+    assert 'zp' in sncosmo_light_curve.colnames
+    assert 'zpsys' in sncosmo_light_curve.colnames
