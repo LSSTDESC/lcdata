@@ -132,8 +132,7 @@ demand.
     >>> light_curve = dataset.light_curves[10]
 
     >>> # Select a subset of the dataset and load all of its light curves into memory.
-    >>> subset = dataset.light_curves[1000:2000]
-    >>> subset.load()
+    >>> subset = dataset[1000:2000].load()
 
 A common use case for this functionality is to process all of the light curves in the
 dataset in chunks. lcdata provides a helper to do this:
