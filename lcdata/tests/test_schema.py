@@ -123,7 +123,7 @@ def test_format_dict(dictionary, schema):
 def test_format_dict_alias(dictionary, schema):
     input_dict = dictionary.copy()
     input_dict['bb'] = input_dict.pop('b')
-    format_dict = lcdata.schema.format_dict(dictionary, schema, verbose=True)
+    format_dict = lcdata.schema.format_dict(input_dict, schema, verbose=True)
     assert dictionary == format_dict
 
 

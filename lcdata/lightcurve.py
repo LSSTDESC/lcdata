@@ -3,6 +3,9 @@ import numpy as np
 from . import schema
 
 
+__all__ = ["parse_light_curve", "to_sncosmo"]
+
+
 _session_id = None
 _object_id_count = 0
 
