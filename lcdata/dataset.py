@@ -79,7 +79,7 @@ class Dataset:
             # Manually loading the array works and is much faster.
             self.light_curves = np.empty(len(light_curves), dtype=object)
             for i in range(len(light_curves)):
-                self.light_curves[i] = light_curves[i]
+                self.light_curves[i] = light_curves[order[i]]
 
             self._update_lc_meta()
 

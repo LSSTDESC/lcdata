@@ -63,6 +63,26 @@ def test_from_light_curves():
     assert len(dataset) == 1
 
 
+def test_from_light_curves_order():
+    # We sort the light curves in alphabetical order. Make sure that this works
+    # correctly.
+    lc1 = make_light_curve(object_id='1')
+    lc2 = make_light_curve(object_id='2')
+    lc3 = make_light_curve(object_id='3')
+
+    # Add a flag to the fluxes so that we can track them.
+    lc1['flux'][0] = 1.
+    lc2['flux'][0] = 2.
+    lc3['flux'][0] = 3.
+
+    dataset = lcdata.from_light_curves([lc2, lc3, lc1])
+
+    assert np.all(dataset.meta['object_id'] == ['1', '2', '3'])
+    assert dataset.light_curves[0]['flux'][0] == 1.
+    assert dataset.light_curves[1]['flux'][0] == 2.
+    assert dataset.light_curves[2]['flux'][0] == 3.
+
+
 def test_dataset_length(dataset):
     assert len(dataset) == 10
 
