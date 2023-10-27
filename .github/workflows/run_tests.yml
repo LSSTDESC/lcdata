@@ -39,31 +39,31 @@ jobs:
         with:
           file: ./coverage.xml
 
-    scripts:
-      name: ${{ matrix.name }}
-      runs-on: ${{ matrix.os }}
-      strategy:
-        fail-fast: false
-        matrix:
-          include:
-            - name: Download PS1
-              os: ubuntu-latest
-              python: 3.9
-              script: lcdata_download_ps1
+  scripts:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Download PS1
+            os: ubuntu-latest
+            python: 3.9
+            script: lcdata_download_ps1
 
-            - name: Download PLAsTiCC
-              os: ubuntu-latest
-              python: 3.9
-              script: lcdata_download_plasticc
+          - name: Download PLAsTiCC
+            os: ubuntu-latest
+            python: 3.9
+            script: lcdata_download_plasticc
 
-      steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
-        - name: Set up Python
-          uses: actions/setup-python@v4
-          with:
-            python-version: ${{ matrix.python }}
-        - name: Install the package
-          run: pip install .
-        - name: Run the script
-          run: ${{ matrix.script }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install the package
+        run: pip install .
+      - name: Run the script
+        run: ${{ matrix.script }}
