@@ -51,6 +51,11 @@ lcdata_download_ps1 = "lcdata.scripts.lcdata_download_ps1:main"
 [project.urls]
 "Source Code" = "https://github.com/lsstdesc/lcdata"
 
+[tool.setuptools.package-data]
+"lcdata.datasets" = [
+    "vav2020_table1_patched.tex.bz2",
+]
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"

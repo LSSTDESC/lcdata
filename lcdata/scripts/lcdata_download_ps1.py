@@ -19,6 +19,7 @@ except ImportError:
     from importlib import resources
 
 import lcdata
+import lcdata.datasets
 
 
 def update_bands(table):
@@ -57,7 +58,7 @@ def download_ps1(directory):
     lcdata.utils.download_zenodo("3974950", rawdir)
 
     print("Parsing metadata...")
-    with resources.files(lcdata).joinpath('datasets/vav2020_table1_patched.tex.bz2').open('rb') as compressed:
+    with resources.files(lcdata.datasets).joinpath('vav2020_table1_patched.tex.bz2').open('rb') as compressed:
         with bz2.open(compressed, 'rt') as file:
             raw_metadata = np.genfromtxt(file, delimiter=' & ', skip_header=7,
                                          skip_footer=8, dtype=None, encoding='ascii',
