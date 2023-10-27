@@ -30,9 +30,7 @@ download = [
     'importlib_resources; python_version < "3.9"',
 ]
 test = [
-    "pytest"
-]
-test_coverage = [
+    "pytest",
     "coverage[toml]",
     "pytest-cov",
 ]
