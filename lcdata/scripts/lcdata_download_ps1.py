@@ -92,7 +92,7 @@ def download_ps1(directory):
     print("\nDone!")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         description="Download the PS1 dataset from Zenodo."
     )
@@ -100,3 +100,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     download_ps1(args.directory)
+
+
+if __name__ == "__main__":
+    main()

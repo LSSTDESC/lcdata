@@ -115,7 +115,7 @@ def download_plasticc(directory):
     print("\nDone!")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         description="Download the PLAsTiCC dataset from Zenodo."
     )
@@ -123,3 +123,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     download_plasticc(args.directory)
+
+
+if __name__ == "__main__":
+    main()

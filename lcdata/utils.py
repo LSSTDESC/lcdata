@@ -47,7 +47,9 @@ def download_file(url, path, filesize=None):
     # Download with a progress bar.
     with requests.get(url, stream=True) as response:
         response.raise_for_status()
-        total_size = int(response.headers.get('content-length'))
+        total_size = response.headers.get('content-length')
+        if total_size is not None:
+            total_size = int(total_size)
         chunk_size = 128 * 1024
         progress_bar = tqdm(total=total_size, unit='B', unit_scale=True,
                             desc=url.split('/')[-1])

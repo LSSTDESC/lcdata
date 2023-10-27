@@ -1,6 +1,56 @@
-[build-system]
-requires = [
-    "setuptools",
-    "wheel",
+[project]
+name = "lcdata"
+version = "1.1.1"
+description = "lcdata: Tools for manipulating large datasets of astronomical light curves"
+authors = [
+    {name="Kyle Boone", email="kyboone@uw.edu"},
+    {name="Konstantin Malanchev", email="malanchev@cmu.edu"}
 ]
+license = {file = "LICENSE"}
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "astropy",
+    "h5py",
+    "numpy>=1.19.0",
+    "pyyaml",
+    "requests",
+    "tables",
+    "tqdm",
+]
+requires-python = ">=3.6"
+
+[project.optional-dependencies]
+download = [
+    "sncosmo",
+    'importlib_resources; python_version < "3.9"',
+]
+test = [
+    "pytest"
+]
+test_coverage = [
+    "coverage",
+    "pytest-cov",
+]
+docs = [
+    "numpy",
+    "sphinx",
+    "sphinx_rtd_theme",
+    "pillow",
+    "numpydoc",
+]
+
+[project.scripts]
+lcdata_download_plasticc = "lcdata.scripts.lcdata_download_plasticc:main"
+lcdata_download_ps1 = "lcdata.scripts.lcdata_download_ps1:main"
+
+[project.urls]
+"Source Code" = "https://github.com/lsstdesc/lcdata"
+
+[build-system]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
