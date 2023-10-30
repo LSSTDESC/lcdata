@@ -54,7 +54,7 @@ jobs:
           - name: Download PLAsTiCC
             os: ubuntu-latest
             python: 3.9
-            script: lcdata_download_plasticc
+            script: lcdata_download_plasticc --train-only
 
     steps:
       - name: Checkout code

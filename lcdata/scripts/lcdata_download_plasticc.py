@@ -69,7 +69,7 @@ def update_classes(table):
     table['true_target'] = update_func(table['true_target'])
 
 
-def download_plasticc(directory):
+def download_plasticc(directory, train_only=False):
     rawdir = os.path.join(directory, 'plasticc_raw')
 
     print("Downloading the PLAsTiCC dataset from zenodo...")
@@ -85,6 +85,11 @@ def download_plasticc(directory):
     update_bands(train_observations)
     dataset = lcdata.from_observations(train_meta, train_observations)
     dataset.write_hdf5(train_path, overwrite=True)
+
+    if train_only:
+        print("Skipping test dataset processing.")
+        print("\nDone!")
+        return
 
     print("Processing test dataset...")
     test_path = os.path.join(directory, 'plasticc_test.h5')
@@ -119,10 +124,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="Download the PLAsTiCC dataset from Zenodo."
     )
-    parser.add_argument('--directory', default='./data/')
+    parser.add_argument('--directory', default='./data/',
+                        help="Directory to download the dataset to.")
+    parser.add_argument('--train-only', action='store_true',
+                        help="Download both datasets, but only process the training set. Mostly for testing.")
 
     args = parser.parse_args()
-    download_plasticc(args.directory)
+    download_plasticc(args.directory, train_only=args.train_only)
 
 
 if __name__ == "__main__":
