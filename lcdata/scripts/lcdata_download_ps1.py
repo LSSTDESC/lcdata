@@ -5,6 +5,7 @@
 import argparse
 import astropy
 import astropy.table
+import bz2
 import io
 import os
 import re
@@ -12,7 +13,13 @@ import numpy as np
 import sncosmo
 import zipfile
 
+try:
+    import importlib_resources as resources
+except ImportError:
+    from importlib import resources
+
 import lcdata
+import lcdata.datasets
 
 
 def update_bands(table):
@@ -50,29 +57,12 @@ def download_ps1(directory):
     print("Downloading the PS1 dataset from zenodo...")
     lcdata.utils.download_zenodo("3974950", rawdir)
 
-    print("Downloading metadata...")
-    # Download from Ashley Villar's website. This data is also available in the
-    # published paper, but it is behind a paywall which makes it challenging to
-    # automatically download.
-    raw_metadata_path = os.path.join(rawdir, 'vav2020_table1.tex')
-    metadata_url = 'http://ashleyvillar.com/data/vav2020_table1.tex'
-    lcdata.utils.download_file(metadata_url, raw_metadata_path)
-
-    # There is a problem with PS1-14kz where it is missing two columns. Patch that.
-    print("Patching metadata...")
-    metadata_path = os.path.join(rawdir, 'vav2020_table1_patched.tex')
-    with open(raw_metadata_path, 'r') as f:
-        lines = f.readlines()
-    assert 'PS1-14kz' in lines[5234]
-    lines[5234] = ('PS1-14kz & PSc590287 & - & - & 150.7406 & 1.2456 & 0.0261 & SNIa & '
-                   '0.15 & - & - & 6 & - & Y & Y \\\\\n')
-    with open(metadata_path, 'w') as f:
-        f.writelines(lines)
-
     print("Parsing metadata...")
-    raw_metadata = np.genfromtxt(metadata_path, delimiter=' & ', skip_header=7,
-                                 skip_footer=8, dtype=None, encoding='ascii',
-                                 missing_values='-', usemask=True)
+    with resources.files(lcdata.datasets).joinpath('vav2020_table1_patched.tex.bz2').open('rb') as compressed:
+        with bz2.open(compressed, 'rt') as file:
+            raw_metadata = np.genfromtxt(file, delimiter=' & ', skip_header=7,
+                                         skip_footer=8, dtype=None, encoding='ascii',
+                                         missing_values='-', usemask=True)
 
     metadata = astropy.table.Table(
         raw_metadata,
@@ -103,7 +93,7 @@ def download_ps1(directory):
     print("\nDone!")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(
         description="Download the PS1 dataset from Zenodo."
     )
@@ -111,3 +101,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     download_ps1(args.directory)
+
+
+if __name__ == "__main__":
+    main()

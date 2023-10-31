@@ -1,6 +1,85 @@
-[build-system]
-requires = [
-    "setuptools",
-    "wheel",
+[project]
+name = "lcdata"
+version = "1.1.1"
+description = "lcdata: Tools for manipulating large datasets of astronomical light curves"
+authors = [
+    {name="Kyle Boone", email="kyboone@uw.edu"},
+    {name="Konstantin Malanchev", email="malanchev@cmu.edu"}
 ]
+license = {file = "LICENSE"}
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "astropy",
+    "h5py",
+    "numpy>=1.19.0",
+    "pyyaml",
+    "requests",
+    "tables",
+    "tqdm",
+]
+requires-python = ">=3.6"
+
+[project.optional-dependencies]
+download = [
+    "sncosmo",
+    'importlib_resources; python_version < "3.9"',
+]
+test = [
+    "pytest",
+    "coverage[toml]",
+    "pytest-cov",
+]
+docs = [
+    "numpy",
+    "sphinx",
+    "sphinx_rtd_theme",
+    "pillow",
+    "numpydoc",
+]
+
+[project.scripts]
+lcdata_download_plasticc = "lcdata.scripts.lcdata_download_plasticc:main"
+lcdata_download_ps1 = "lcdata.scripts.lcdata_download_ps1:main"
+
+[project.urls]
+"Source Code" = "https://github.com/lsstdesc/lcdata"
+
+[tool.setuptools.package-data]
+"lcdata.datasets" = [
+    "vav2020_table1_patched.tex.bz2",
+]
+
+[tool.coverage.run]
+source = ["lcdata"]
+omit = [
+    "lcdata/tests/*",
+    "lcdata/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+   # Have to re-enable the standard pragma
+   "pragma: no cover",
+
+   # Don't complain about packages we have installed
+   "except ImportError",
+
+   # Don't complain if tests don't hit assertions
+   "raise AssertionError",
+   "raise NotImplementedError",
+
+   # Don't complain about script hooks
+   'def main\(.*\):',
+
+   # Ignore branches that don't pertain to this version of Python
+   "pragma: py{ignore_python_version}",
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
