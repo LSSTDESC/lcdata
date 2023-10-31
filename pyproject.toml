@@ -1,6 +1,6 @@
 [project]
 name = "lcdata"
-version = "1.1.1"
+version = "1.1.2"
 description = "lcdata: Tools for manipulating large datasets of astronomical light curves"
 authors = [
     {name="Kyle Boone", email="kyboone@uw.edu"},
